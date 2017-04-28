@@ -1,0 +1,8 @@
+
+	e := Event{
+		ID:        u1,
+		Timestamp: time.Now(),
+		Related:   []string{fmt.Sprintf("urn:golpje:episode:asdlkjubdf")},
+		Data:      "Shit was downloaded yo",
+	}
+	err = db.Save(&e)
