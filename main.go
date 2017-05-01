@@ -45,11 +45,15 @@ func main() {
 	}
 	var events []Event
 	err = db.All(&events)
+	now := time.Now()
+	then := now.Add(-2 * time.Hour)
 	for _, e := range events {
-		fmt.Println("------------------------")
-		fmt.Println(e.ID)
-		fmt.Println(e.Data)
-		fmt.Println(e.Timestamp)
+		if e.Timestamp.After(then) {
+			fmt.Println("------------------------")
+			fmt.Println(e.ID)
+			fmt.Println(e.Data)
+			fmt.Println(e.Timestamp)
+		}
 	}
 	fmt.Println("jep")
 }
