@@ -1,7 +1,17 @@
 #!/bin/bash
 
+function log {
+    echo "> ${@}"
+}
+
+log "updating dependencies"
 go get -d .
 
-go build main.go
+log "building"
+mkdir -p dist
+go build -o dist/golpje *.go
 
-./main
+log "starting"
+echo '---------------------------------'
+echo
+dist/golpje ${@}
