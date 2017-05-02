@@ -6,3 +6,26 @@
 		Data:      "Shit was downloaded yo",
 	}
 	err = db.Save(&e)
+
+
+
+	db, err := storm.Open("test.db")
+	defer db.Close()
+	u1, _ := uuid.NewRandom()
+	fmt.Println(u1)
+	if err != nil {
+		fmt.Println("nu al een faal", err.Error())
+	}
+	var events []Event
+	err = db.All(&events)
+	now := time.Now()
+	then := now.Add(-2 * time.Hour)
+	for _, e := range events {
+		if e.Timestamp.After(then) {
+			fmt.Println("------------------------")
+			fmt.Println(e.ID)
+			fmt.Println(e.Data)
+			fmt.Println(e.Timestamp)
+		}
+	}
+	fmt.Println("jep")
