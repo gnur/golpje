@@ -1,4 +1,4 @@
-package main
+package command
 
 import "fmt"
 
@@ -14,13 +14,17 @@ func (c *TestCommand) Help() string {
 }
 
 // Run actually runs the command
-func (c *TestCommand) Run(a []string) int {
-	fmt.Println("Run!")
+func (c *TestCommand) Run(args []string) int {
+	restr := ""
+	for _, arg := range args {
+		restr = restr + " " + arg
+	}
+	fmt.Println(restr)
+
 	return 0
 }
 
 // Synopsis returns a show description
 func (c *TestCommand) Synopsis() string {
-	fmt.Println("Synopsis!")
 	return "This does shit"
 }
