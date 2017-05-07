@@ -27,11 +27,3 @@ type Episode struct {
 	Downloaded  bool `storm:"index"`
 	Downloading bool `storm:"index"`
 }
-
-// Event an event consists of data and any related urns in Related
-type Event struct {
-	ID        uuid.UUID
-	Timestamp time.Time `storm:"index"`
-	Related   []string  `storm:"index"`
-	Data      string
-}

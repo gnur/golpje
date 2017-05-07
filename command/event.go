@@ -1,10 +1,12 @@
 package command
 
 import (
+	"flag"
 	"fmt"
+	"strings"
+	"time"
 
-	"github.com/gnur/golpje/database"
-	"github.com/gnur/golpje/structs"
+	"github.com/gnur/golpje/events"
 )
 
 // EventCommand basic setup
@@ -19,18 +21,52 @@ func (c *EventCommand) Help() string {
 
 // Run actually runs the command
 func (c *EventCommand) Run(args []string) int {
-	db := database.Conn
-	var events []structs.Event
 
-	err := db.All(&events)
-	if err != nil {
-		fmt.Println("oops")
+	if len(args) == 0 {
+		args = []string{"list", "since", "24h"}
 	}
-	for _, e := range events {
-		fmt.Println("------------------------")
-		fmt.Println(e.ID)
-		fmt.Println(e.Data)
-		fmt.Println(e.Timestamp)
+	if args[0] == "add" {
+		addCommand := flag.NewFlagSet("add", flag.ExitOnError)
+
+		eventText := addCommand.String("text", "dummy event", "text of the event to add")
+		relatedTags := addCommand.String("related", "", "comma separated list of related arns")
+
+		addCommand.Parse(args[1:])
+
+		var related []string
+
+		if *relatedTags != "" {
+			related = strings.Split(*relatedTags, ",")
+		}
+
+		id, err := events.New(*eventText, related)
+		if err != nil {
+			fmt.Println(err.Error())
+		} else {
+			fmt.Println("added event with id: ", id)
+		}
+
+	} else if args[0] == "list" {
+		listCommand := flag.NewFlagSet("list", flag.ExitOnError)
+
+		returnAll := listCommand.Bool("all", false, "Return all events")
+		returnSince := listCommand.Duration("since", 24*time.Hour, "period from which to return events")
+
+		listCommand.Parse(args[1:])
+		var allevents []events.Event
+
+		if *returnAll {
+			allevents, _ = events.All()
+			fmt.Println("Retrieving all events")
+		} else {
+			now := time.Now()
+			then := now.Add(-*returnSince)
+			fmt.Println("Retrieving events since", then)
+			allevents, _ = events.After(then)
+		}
+		for _, e := range allevents {
+			events.Print(e)
+		}
 	}
 
 	return 0
