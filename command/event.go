@@ -65,7 +65,7 @@ func (c *EventCommand) Run(args []string) int {
 			allevents, _ = events.After(then)
 		}
 		for _, e := range allevents {
-			events.Print(e)
+			e.Print()
 		}
 	}
 
