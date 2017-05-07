@@ -60,7 +60,7 @@ func New(text string, related []string) (uuid.UUID, error) {
 	return e.ID, nil
 }
 
-// Print provides a convenient way of pretty printing a event
+// Print provides a convenient way of pretty printing an event
 func (e Event) Print() {
 	fmt.Println("--------------")
 	fmt.Println(e.Timestamp.Format(time.Stamp), "  -  ", e.ID)
