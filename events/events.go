@@ -20,10 +20,9 @@ type Event struct {
 
 // All returns all events
 func All() ([]Event, error) {
-	db := database.Conn
 	var events []Event
 
-	err := db.AllByIndex("Timestamp", &events, storm.Reverse())
+	err := database.Conn.AllByIndex("Timestamp", &events, storm.Reverse())
 	return events, err
 }
 
