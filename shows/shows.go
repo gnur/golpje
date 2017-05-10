@@ -6,21 +6,15 @@ import (
 
 	"github.com/asdine/storm"
 	"github.com/gnur/golpje/database"
+	"github.com/gnur/golpje/golpje"
 	"github.com/google/uuid"
 )
 
-// Show a show
-type Show struct {
-	ID            uuid.UUID
-	Name          string `storm:"unique"`
-	Regexp        string
-	Active        bool `storm:"index"`
-	Episodeidtype string
-	Minimal       int
-}
+// Show a local alias of the protobuf Show
+type Show golpje.Show
 
 // New creates a new show
-func New(name, regexp, episodeidtype string, active bool, minimal int) (uuid.UUID, error) {
+func New(name, regexp, episodeidtype string, active bool, minimal uint32) (string, error) {
 	var match Show
 
 	err := database.Conn.One("Name", name, &match)
@@ -31,7 +25,7 @@ func New(name, regexp, episodeidtype string, active bool, minimal int) (uuid.UUI
 	u1 := uuid.New()
 
 	s := Show{
-		ID:            u1,
+		ID:            u1.String(),
 		Name:          name,
 		Regexp:        regexp,
 		Episodeidtype: episodeidtype,

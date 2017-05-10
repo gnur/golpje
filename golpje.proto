@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package golpje;
+
+message Empty {}
+
+message Show {
+    string ID = 1;
+    // @inject_tag: storm:"unique"
+    string Name = 2;
+    string Regexp = 3;
+    // @inject_tag: storm:"index"
+    bool Active = 4;
+    string Episodeidtype = 5;
+    uint32 Minimal = 6;
+}
+
+message Event {
+    string ID = 1;
+    // @inject_tag: storm:"index"
+    int64 Timestamp = 2;
+    repeated string related = 3;
+    string Data = 4;
+}
+
+message Episode {
+    string ID = 1;
+    string Title = 2;
+    // @inject_tag: storm:"index"
+    string Showid = 3;
+    // @inject_tag: storm:"index"
+    int64 Added = 4;
+    string Magnetlink = 5;
+    string Episodeid = 6;
+    // @inject_tag: storm:"index"
+    bool Downloaded = 7;
+    // @inject_tag: storm:"index"
+    bool Downloading = 8;
+}
+
+message Events {
+    repeated Event Events = 1;
+}
+
+message EventRequest {
+    bool All = 1;
+    int64 Since = 2;
+}
+
+message Shows {
+    repeated Show Shows = 1;
+}
+
+message Episodes {
+    repeated Episode Episodes = 1;
+}
+
+message ShowRequest {
+    bool Onlyactive = 1;
+    string Name = 2;
+}
+
+message AddShowResponse {
+    Show Show = 1;
+    bool Success = 2;
+    string Error = 3;
+}
+
+message EpisodeRequest {
+    string Showid = 1;
+    uint32 Season = 2;
+}
+
+message AddEpisodeResponse {
+    Episode Episode = 1;
+    bool Success = 2;
+    string Error = 3;
+}
+
+service Golpje {
+    rpc GetEvents (EventRequest) returns (Events) {}
+
+    rpc GetShows (ShowRequest) returns (Shows) {}
+    rpc AddShow (Show) returns (AddShowResponse) {}
+
+    rpc GetEpisodes (EpisodeRequest) returns (Episodes) {}
+    rpc AddEpisode (Episode) returns (AddEpisodeResponse) {}
+}

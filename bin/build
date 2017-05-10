@@ -4,6 +4,12 @@ function log {
     echo "> ${@}"
 }
 
+log "generating proto shizzles"
+protoc --proto_path=./ -I../golpje/ --go_out=golpje golpje.proto
+
+log "Inserting storm shizzles"
+protoc-go-inject-tag -input=./golpje/golpje.pb.go &> /dev/null
+
 log "updating dependencies"
 go get -d .
 
