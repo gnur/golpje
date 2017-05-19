@@ -10,13 +10,13 @@ It is generated from these files:
 
 It has these top-level messages:
 	Empty
-	Show
-	Event
-	Episode
-	Events
+	ProtoShow
+	ProtoEvent
+	ProtoEpisode
+	ProtoEvents
 	EventRequest
-	Shows
-	Episodes
+	ProtoShows
+	ProtoEpisodes
 	ShowRequest
 	AddShowResponse
 	EpisodeRequest
@@ -27,6 +27,11 @@ package golpje
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
+
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -47,191 +52,184 @@ func (m *Empty) String() string            { return proto.CompactTextString(m) }
 func (*Empty) ProtoMessage()               {}
 func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-type Show struct {
-	ID string `protobuf:"bytes,1,opt,name=ID" json:"ID,omitempty"`
-	// @inject_tag: storm:"unique"
-	Name   string `protobuf:"bytes,2,opt,name=Name" json:"Name,omitempty" storm:"unique"`
-	Regexp string `protobuf:"bytes,3,opt,name=Regexp" json:"Regexp,omitempty"`
-	// @inject_tag: storm:"index"
-	Active        bool   `protobuf:"varint,4,opt,name=Active" json:"Active,omitempty" storm:"index"`
+type ProtoShow struct {
+	ID            string `protobuf:"bytes,1,opt,name=ID" json:"ID,omitempty"`
+	Name          string `protobuf:"bytes,2,opt,name=Name" json:"Name,omitempty"`
+	Regexp        string `protobuf:"bytes,3,opt,name=Regexp" json:"Regexp,omitempty"`
+	Active        bool   `protobuf:"varint,4,opt,name=Active" json:"Active,omitempty"`
 	Episodeidtype string `protobuf:"bytes,5,opt,name=Episodeidtype" json:"Episodeidtype,omitempty"`
 	Minimal       uint32 `protobuf:"varint,6,opt,name=Minimal" json:"Minimal,omitempty"`
 }
 
-func (m *Show) Reset()                    { *m = Show{} }
-func (m *Show) String() string            { return proto.CompactTextString(m) }
-func (*Show) ProtoMessage()               {}
-func (*Show) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+func (m *ProtoShow) Reset()                    { *m = ProtoShow{} }
+func (m *ProtoShow) String() string            { return proto.CompactTextString(m) }
+func (*ProtoShow) ProtoMessage()               {}
+func (*ProtoShow) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
-func (m *Show) GetID() string {
+func (m *ProtoShow) GetID() string {
 	if m != nil {
 		return m.ID
 	}
 	return ""
 }
 
-func (m *Show) GetName() string {
+func (m *ProtoShow) GetName() string {
 	if m != nil {
 		return m.Name
 	}
 	return ""
 }
 
-func (m *Show) GetRegexp() string {
+func (m *ProtoShow) GetRegexp() string {
 	if m != nil {
 		return m.Regexp
 	}
 	return ""
 }
 
-func (m *Show) GetActive() bool {
+func (m *ProtoShow) GetActive() bool {
 	if m != nil {
 		return m.Active
 	}
 	return false
 }
 
-func (m *Show) GetEpisodeidtype() string {
+func (m *ProtoShow) GetEpisodeidtype() string {
 	if m != nil {
 		return m.Episodeidtype
 	}
 	return ""
 }
 
-func (m *Show) GetMinimal() uint32 {
+func (m *ProtoShow) GetMinimal() uint32 {
 	if m != nil {
 		return m.Minimal
 	}
 	return 0
 }
 
-type Event struct {
-	ID string `protobuf:"bytes,1,opt,name=ID" json:"ID,omitempty"`
-	// @inject_tag: storm:"index"
-	Timestamp int64    `protobuf:"varint,2,opt,name=Timestamp" json:"Timestamp,omitempty" storm:"index"`
+type ProtoEvent struct {
+	ID        string   `protobuf:"bytes,1,opt,name=ID" json:"ID,omitempty"`
+	Timestamp int64    `protobuf:"varint,2,opt,name=Timestamp" json:"Timestamp,omitempty"`
 	Related   []string `protobuf:"bytes,3,rep,name=related" json:"related,omitempty"`
 	Data      string   `protobuf:"bytes,4,opt,name=Data" json:"Data,omitempty"`
 }
 
-func (m *Event) Reset()                    { *m = Event{} }
-func (m *Event) String() string            { return proto.CompactTextString(m) }
-func (*Event) ProtoMessage()               {}
-func (*Event) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+func (m *ProtoEvent) Reset()                    { *m = ProtoEvent{} }
+func (m *ProtoEvent) String() string            { return proto.CompactTextString(m) }
+func (*ProtoEvent) ProtoMessage()               {}
+func (*ProtoEvent) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-func (m *Event) GetID() string {
+func (m *ProtoEvent) GetID() string {
 	if m != nil {
 		return m.ID
 	}
 	return ""
 }
 
-func (m *Event) GetTimestamp() int64 {
+func (m *ProtoEvent) GetTimestamp() int64 {
 	if m != nil {
 		return m.Timestamp
 	}
 	return 0
 }
 
-func (m *Event) GetRelated() []string {
+func (m *ProtoEvent) GetRelated() []string {
 	if m != nil {
 		return m.Related
 	}
 	return nil
 }
 
-func (m *Event) GetData() string {
+func (m *ProtoEvent) GetData() string {
 	if m != nil {
 		return m.Data
 	}
 	return ""
 }
 
-type Episode struct {
-	ID    string `protobuf:"bytes,1,opt,name=ID" json:"ID,omitempty"`
-	Title string `protobuf:"bytes,2,opt,name=Title" json:"Title,omitempty"`
-	// @inject_tag: storm:"index"
-	Showid string `protobuf:"bytes,3,opt,name=Showid" json:"Showid,omitempty" storm:"index"`
-	// @inject_tag: storm:"index"
-	Added      int64  `protobuf:"varint,4,opt,name=Added" json:"Added,omitempty" storm:"index"`
-	Magnetlink string `protobuf:"bytes,5,opt,name=Magnetlink" json:"Magnetlink,omitempty"`
-	Episodeid  string `protobuf:"bytes,6,opt,name=Episodeid" json:"Episodeid,omitempty"`
-	// @inject_tag: storm:"index"
-	Downloaded bool `protobuf:"varint,7,opt,name=Downloaded" json:"Downloaded,omitempty" storm:"index"`
-	// @inject_tag: storm:"index"
-	Downloading bool `protobuf:"varint,8,opt,name=Downloading" json:"Downloading,omitempty" storm:"index"`
+type ProtoEpisode struct {
+	ID          string `protobuf:"bytes,1,opt,name=ID" json:"ID,omitempty"`
+	Title       string `protobuf:"bytes,2,opt,name=Title" json:"Title,omitempty"`
+	Showid      string `protobuf:"bytes,3,opt,name=Showid" json:"Showid,omitempty"`
+	Added       int64  `protobuf:"varint,4,opt,name=Added" json:"Added,omitempty"`
+	Magnetlink  string `protobuf:"bytes,5,opt,name=Magnetlink" json:"Magnetlink,omitempty"`
+	Episodeid   string `protobuf:"bytes,6,opt,name=Episodeid" json:"Episodeid,omitempty"`
+	Downloaded  bool   `protobuf:"varint,7,opt,name=Downloaded" json:"Downloaded,omitempty"`
+	Downloading bool   `protobuf:"varint,8,opt,name=Downloading" json:"Downloading,omitempty"`
 }
 
-func (m *Episode) Reset()                    { *m = Episode{} }
-func (m *Episode) String() string            { return proto.CompactTextString(m) }
-func (*Episode) ProtoMessage()               {}
-func (*Episode) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (m *ProtoEpisode) Reset()                    { *m = ProtoEpisode{} }
+func (m *ProtoEpisode) String() string            { return proto.CompactTextString(m) }
+func (*ProtoEpisode) ProtoMessage()               {}
+func (*ProtoEpisode) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
-func (m *Episode) GetID() string {
+func (m *ProtoEpisode) GetID() string {
 	if m != nil {
 		return m.ID
 	}
 	return ""
 }
 
-func (m *Episode) GetTitle() string {
+func (m *ProtoEpisode) GetTitle() string {
 	if m != nil {
 		return m.Title
 	}
 	return ""
 }
 
-func (m *Episode) GetShowid() string {
+func (m *ProtoEpisode) GetShowid() string {
 	if m != nil {
 		return m.Showid
 	}
 	return ""
 }
 
-func (m *Episode) GetAdded() int64 {
+func (m *ProtoEpisode) GetAdded() int64 {
 	if m != nil {
 		return m.Added
 	}
 	return 0
 }
 
-func (m *Episode) GetMagnetlink() string {
+func (m *ProtoEpisode) GetMagnetlink() string {
 	if m != nil {
 		return m.Magnetlink
 	}
 	return ""
 }
 
-func (m *Episode) GetEpisodeid() string {
+func (m *ProtoEpisode) GetEpisodeid() string {
 	if m != nil {
 		return m.Episodeid
 	}
 	return ""
 }
 
-func (m *Episode) GetDownloaded() bool {
+func (m *ProtoEpisode) GetDownloaded() bool {
 	if m != nil {
 		return m.Downloaded
 	}
 	return false
 }
 
-func (m *Episode) GetDownloading() bool {
+func (m *ProtoEpisode) GetDownloading() bool {
 	if m != nil {
 		return m.Downloading
 	}
 	return false
 }
 
-type Events struct {
-	Events []*Event `protobuf:"bytes,1,rep,name=Events" json:"Events,omitempty"`
+type ProtoEvents struct {
+	Events []*ProtoEvent `protobuf:"bytes,1,rep,name=Events" json:"Events,omitempty"`
 }
 
-func (m *Events) Reset()                    { *m = Events{} }
-func (m *Events) String() string            { return proto.CompactTextString(m) }
-func (*Events) ProtoMessage()               {}
-func (*Events) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (m *ProtoEvents) Reset()                    { *m = ProtoEvents{} }
+func (m *ProtoEvents) String() string            { return proto.CompactTextString(m) }
+func (*ProtoEvents) ProtoMessage()               {}
+func (*ProtoEvents) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
-func (m *Events) GetEvents() []*Event {
+func (m *ProtoEvents) GetEvents() []*ProtoEvent {
 	if m != nil {
 		return m.Events
 	}
@@ -262,32 +260,32 @@ func (m *EventRequest) GetSince() int64 {
 	return 0
 }
 
-type Shows struct {
-	Shows []*Show `protobuf:"bytes,1,rep,name=Shows" json:"Shows,omitempty"`
+type ProtoShows struct {
+	Shows []*ProtoShow `protobuf:"bytes,1,rep,name=Shows" json:"Shows,omitempty"`
 }
 
-func (m *Shows) Reset()                    { *m = Shows{} }
-func (m *Shows) String() string            { return proto.CompactTextString(m) }
-func (*Shows) ProtoMessage()               {}
-func (*Shows) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+func (m *ProtoShows) Reset()                    { *m = ProtoShows{} }
+func (m *ProtoShows) String() string            { return proto.CompactTextString(m) }
+func (*ProtoShows) ProtoMessage()               {}
+func (*ProtoShows) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
-func (m *Shows) GetShows() []*Show {
+func (m *ProtoShows) GetShows() []*ProtoShow {
 	if m != nil {
 		return m.Shows
 	}
 	return nil
 }
 
-type Episodes struct {
-	Episodes []*Episode `protobuf:"bytes,1,rep,name=Episodes" json:"Episodes,omitempty"`
+type ProtoEpisodes struct {
+	Episodes []*ProtoEpisode `protobuf:"bytes,1,rep,name=Episodes" json:"Episodes,omitempty"`
 }
 
-func (m *Episodes) Reset()                    { *m = Episodes{} }
-func (m *Episodes) String() string            { return proto.CompactTextString(m) }
-func (*Episodes) ProtoMessage()               {}
-func (*Episodes) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
+func (m *ProtoEpisodes) Reset()                    { *m = ProtoEpisodes{} }
+func (m *ProtoEpisodes) String() string            { return proto.CompactTextString(m) }
+func (*ProtoEpisodes) ProtoMessage()               {}
+func (*ProtoEpisodes) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
-func (m *Episodes) GetEpisodes() []*Episode {
+func (m *ProtoEpisodes) GetEpisodes() []*ProtoEpisode {
 	if m != nil {
 		return m.Episodes
 	}
@@ -319,9 +317,9 @@ func (m *ShowRequest) GetName() string {
 }
 
 type AddShowResponse struct {
-	Show    *Show  `protobuf:"bytes,1,opt,name=Show" json:"Show,omitempty"`
-	Success bool   `protobuf:"varint,2,opt,name=Success" json:"Success,omitempty"`
-	Error   string `protobuf:"bytes,3,opt,name=Error" json:"Error,omitempty"`
+	Show    *ProtoShow `protobuf:"bytes,1,opt,name=Show" json:"Show,omitempty"`
+	Success bool       `protobuf:"varint,2,opt,name=Success" json:"Success,omitempty"`
+	Error   string     `protobuf:"bytes,3,opt,name=Error" json:"Error,omitempty"`
 }
 
 func (m *AddShowResponse) Reset()                    { *m = AddShowResponse{} }
@@ -329,7 +327,7 @@ func (m *AddShowResponse) String() string            { return proto.CompactTextS
 func (*AddShowResponse) ProtoMessage()               {}
 func (*AddShowResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
-func (m *AddShowResponse) GetShow() *Show {
+func (m *AddShowResponse) GetShow() *ProtoShow {
 	if m != nil {
 		return m.Show
 	}
@@ -375,9 +373,9 @@ func (m *EpisodeRequest) GetSeason() uint32 {
 }
 
 type AddEpisodeResponse struct {
-	Episode *Episode `protobuf:"bytes,1,opt,name=Episode" json:"Episode,omitempty"`
-	Success bool     `protobuf:"varint,2,opt,name=Success" json:"Success,omitempty"`
-	Error   string   `protobuf:"bytes,3,opt,name=Error" json:"Error,omitempty"`
+	Episode *ProtoEpisode `protobuf:"bytes,1,opt,name=Episode" json:"Episode,omitempty"`
+	Success bool          `protobuf:"varint,2,opt,name=Success" json:"Success,omitempty"`
+	Error   string        `protobuf:"bytes,3,opt,name=Error" json:"Error,omitempty"`
 }
 
 func (m *AddEpisodeResponse) Reset()                    { *m = AddEpisodeResponse{} }
@@ -385,7 +383,7 @@ func (m *AddEpisodeResponse) String() string            { return proto.CompactTe
 func (*AddEpisodeResponse) ProtoMessage()               {}
 func (*AddEpisodeResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
-func (m *AddEpisodeResponse) GetEpisode() *Episode {
+func (m *AddEpisodeResponse) GetEpisode() *ProtoEpisode {
 	if m != nil {
 		return m.Episode
 	}
@@ -408,59 +406,264 @@ func (m *AddEpisodeResponse) GetError() string {
 
 func init() {
 	proto.RegisterType((*Empty)(nil), "golpje.Empty")
-	proto.RegisterType((*Show)(nil), "golpje.Show")
-	proto.RegisterType((*Event)(nil), "golpje.Event")
-	proto.RegisterType((*Episode)(nil), "golpje.Episode")
-	proto.RegisterType((*Events)(nil), "golpje.Events")
+	proto.RegisterType((*ProtoShow)(nil), "golpje.ProtoShow")
+	proto.RegisterType((*ProtoEvent)(nil), "golpje.ProtoEvent")
+	proto.RegisterType((*ProtoEpisode)(nil), "golpje.ProtoEpisode")
+	proto.RegisterType((*ProtoEvents)(nil), "golpje.ProtoEvents")
 	proto.RegisterType((*EventRequest)(nil), "golpje.EventRequest")
-	proto.RegisterType((*Shows)(nil), "golpje.Shows")
-	proto.RegisterType((*Episodes)(nil), "golpje.Episodes")
+	proto.RegisterType((*ProtoShows)(nil), "golpje.ProtoShows")
+	proto.RegisterType((*ProtoEpisodes)(nil), "golpje.ProtoEpisodes")
 	proto.RegisterType((*ShowRequest)(nil), "golpje.ShowRequest")
 	proto.RegisterType((*AddShowResponse)(nil), "golpje.AddShowResponse")
 	proto.RegisterType((*EpisodeRequest)(nil), "golpje.EpisodeRequest")
 	proto.RegisterType((*AddEpisodeResponse)(nil), "golpje.AddEpisodeResponse")
 }
 
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion4
+
+// Client API for Golpje service
+
+type GolpjeClient interface {
+	GetEvents(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*ProtoEvents, error)
+	GetShows(ctx context.Context, in *ShowRequest, opts ...grpc.CallOption) (*ProtoShows, error)
+	AddShow(ctx context.Context, in *ProtoShow, opts ...grpc.CallOption) (*AddShowResponse, error)
+	GetEpisodes(ctx context.Context, in *EpisodeRequest, opts ...grpc.CallOption) (*ProtoEpisodes, error)
+	AddEpisode(ctx context.Context, in *ProtoEpisode, opts ...grpc.CallOption) (*AddEpisodeResponse, error)
+}
+
+type golpjeClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewGolpjeClient(cc *grpc.ClientConn) GolpjeClient {
+	return &golpjeClient{cc}
+}
+
+func (c *golpjeClient) GetEvents(ctx context.Context, in *EventRequest, opts ...grpc.CallOption) (*ProtoEvents, error) {
+	out := new(ProtoEvents)
+	err := grpc.Invoke(ctx, "/golpje.Golpje/GetEvents", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *golpjeClient) GetShows(ctx context.Context, in *ShowRequest, opts ...grpc.CallOption) (*ProtoShows, error) {
+	out := new(ProtoShows)
+	err := grpc.Invoke(ctx, "/golpje.Golpje/GetShows", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *golpjeClient) AddShow(ctx context.Context, in *ProtoShow, opts ...grpc.CallOption) (*AddShowResponse, error) {
+	out := new(AddShowResponse)
+	err := grpc.Invoke(ctx, "/golpje.Golpje/AddShow", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *golpjeClient) GetEpisodes(ctx context.Context, in *EpisodeRequest, opts ...grpc.CallOption) (*ProtoEpisodes, error) {
+	out := new(ProtoEpisodes)
+	err := grpc.Invoke(ctx, "/golpje.Golpje/GetEpisodes", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *golpjeClient) AddEpisode(ctx context.Context, in *ProtoEpisode, opts ...grpc.CallOption) (*AddEpisodeResponse, error) {
+	out := new(AddEpisodeResponse)
+	err := grpc.Invoke(ctx, "/golpje.Golpje/AddEpisode", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for Golpje service
+
+type GolpjeServer interface {
+	GetEvents(context.Context, *EventRequest) (*ProtoEvents, error)
+	GetShows(context.Context, *ShowRequest) (*ProtoShows, error)
+	AddShow(context.Context, *ProtoShow) (*AddShowResponse, error)
+	GetEpisodes(context.Context, *EpisodeRequest) (*ProtoEpisodes, error)
+	AddEpisode(context.Context, *ProtoEpisode) (*AddEpisodeResponse, error)
+}
+
+func RegisterGolpjeServer(s *grpc.Server, srv GolpjeServer) {
+	s.RegisterService(&_Golpje_serviceDesc, srv)
+}
+
+func _Golpje_GetEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolpjeServer).GetEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/golpje.Golpje/GetEvents",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolpjeServer).GetEvents(ctx, req.(*EventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Golpje_GetShows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolpjeServer).GetShows(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/golpje.Golpje/GetShows",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolpjeServer).GetShows(ctx, req.(*ShowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Golpje_AddShow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProtoShow)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolpjeServer).AddShow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/golpje.Golpje/AddShow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolpjeServer).AddShow(ctx, req.(*ProtoShow))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Golpje_GetEpisodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EpisodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolpjeServer).GetEpisodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/golpje.Golpje/GetEpisodes",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolpjeServer).GetEpisodes(ctx, req.(*EpisodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Golpje_AddEpisode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProtoEpisode)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolpjeServer).AddEpisode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/golpje.Golpje/AddEpisode",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolpjeServer).AddEpisode(ctx, req.(*ProtoEpisode))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _Golpje_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "golpje.Golpje",
+	HandlerType: (*GolpjeServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetEvents",
+			Handler:    _Golpje_GetEvents_Handler,
+		},
+		{
+			MethodName: "GetShows",
+			Handler:    _Golpje_GetShows_Handler,
+		},
+		{
+			MethodName: "AddShow",
+			Handler:    _Golpje_AddShow_Handler,
+		},
+		{
+			MethodName: "GetEpisodes",
+			Handler:    _Golpje_GetEpisodes_Handler,
+		},
+		{
+			MethodName: "AddEpisode",
+			Handler:    _Golpje_AddEpisode_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "golpje.proto",
+}
+
 func init() { proto.RegisterFile("golpje.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 606 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x54, 0xdd, 0x6a, 0xdb, 0x4c,
-	0x10, 0x8d, 0x2c, 0x5b, 0x3f, 0xe3, 0x9f, 0x84, 0xfd, 0x42, 0x3e, 0x61, 0x4a, 0x10, 0x4b, 0x0b,
-	0x2e, 0x81, 0xb4, 0x38, 0xd0, 0x52, 0x7a, 0x53, 0x81, 0x8d, 0xc9, 0x45, 0x5a, 0x58, 0xe7, 0x05,
-	0x54, 0x69, 0x71, 0xd5, 0xca, 0x92, 0xea, 0xdd, 0x24, 0xf5, 0xab, 0xb4, 0xcf, 0xd6, 0x77, 0x29,
-	0xfb, 0x27, 0x4b, 0x72, 0x6f, 0x7a, 0x37, 0xe7, 0x68, 0x77, 0xe6, 0xcc, 0xd1, 0x91, 0x60, 0xb4,
-	0x29, 0xf3, 0xea, 0x2b, 0xbd, 0xae, 0x76, 0x25, 0x2f, 0x91, 0xa3, 0x10, 0x76, 0x61, 0xb0, 0xdc,
-	0x56, 0x7c, 0x8f, 0x7f, 0x5a, 0xd0, 0x5f, 0x7f, 0x29, 0x9f, 0xd0, 0x04, 0x7a, 0xb7, 0x8b, 0xc0,
-	0x0a, 0xad, 0x99, 0x4f, 0x7a, 0xb7, 0x0b, 0x84, 0xa0, 0xff, 0x31, 0xde, 0xd2, 0xa0, 0x27, 0x19,
-	0x59, 0xa3, 0x0b, 0x70, 0x08, 0xdd, 0xd0, 0x1f, 0x55, 0x60, 0x4b, 0x56, 0x23, 0xc1, 0x47, 0x09,
-	0xcf, 0x1e, 0x69, 0xd0, 0x0f, 0xad, 0x99, 0x47, 0x34, 0x42, 0xcf, 0x61, 0xbc, 0xac, 0x32, 0x56,
-	0xa6, 0x34, 0x4b, 0xf9, 0xbe, 0xa2, 0xc1, 0x40, 0x5e, 0x6b, 0x93, 0x28, 0x00, 0xf7, 0x2e, 0x2b,
-	0xb2, 0x6d, 0x9c, 0x07, 0x4e, 0x68, 0xcd, 0xc6, 0xc4, 0x40, 0x9c, 0xc0, 0x60, 0xf9, 0x48, 0x0b,
-	0x7e, 0x24, 0xee, 0x19, 0xf8, 0xf7, 0xd9, 0x96, 0x32, 0x1e, 0x6f, 0x2b, 0xa9, 0xd0, 0x26, 0x07,
-	0x42, 0x34, 0xdc, 0xd1, 0x3c, 0xe6, 0x34, 0x0d, 0xec, 0xd0, 0x9e, 0xf9, 0xc4, 0x40, 0xb1, 0xd4,
-	0x22, 0xe6, 0xb1, 0x94, 0xe9, 0x13, 0x59, 0xe3, 0xdf, 0x16, 0xb8, 0x5a, 0xd0, 0xd1, 0x9c, 0x73,
-	0x18, 0xdc, 0x67, 0x3c, 0x37, 0x2e, 0x28, 0x20, 0xd6, 0x15, 0x96, 0x65, 0xa9, 0xb1, 0x41, 0x21,
-	0x71, 0x3a, 0x4a, 0x53, 0x9a, 0xca, 0xf6, 0x36, 0x51, 0x00, 0x5d, 0x02, 0xdc, 0xc5, 0x9b, 0x82,
-	0xf2, 0x3c, 0x2b, 0xbe, 0x69, 0x07, 0x1a, 0x8c, 0xd8, 0xa5, 0xf6, 0x43, 0x1a, 0xe0, 0x93, 0x03,
-	0x21, 0x6e, 0x2f, 0xca, 0xa7, 0x22, 0x2f, 0x63, 0xd1, 0xd8, 0x95, 0xf6, 0x36, 0x18, 0x14, 0xc2,
-	0xd0, 0xa0, 0xac, 0xd8, 0x04, 0x9e, 0x3c, 0xd0, 0xa4, 0xf0, 0x2b, 0x70, 0xa4, 0x89, 0x0c, 0xbd,
-	0x30, 0x55, 0x60, 0x85, 0xf6, 0x6c, 0x38, 0x1f, 0x5f, 0xeb, 0x6c, 0x48, 0x96, 0xe8, 0x87, 0xf8,
-	0x0d, 0x8c, 0x14, 0x41, 0xbf, 0x3f, 0x50, 0xc6, 0xd1, 0x19, 0xd8, 0x51, 0x9e, 0x4b, 0x57, 0x3c,
-	0x22, 0x4a, 0xb1, 0xe8, 0x3a, 0x2b, 0x12, 0xaa, 0xad, 0x57, 0x00, 0x5f, 0xc1, 0x40, 0x18, 0xc1,
-	0x10, 0xd6, 0x85, 0x1e, 0x33, 0x32, 0x63, 0x04, 0x49, 0xd4, 0x23, 0xfc, 0x16, 0x3c, 0xbd, 0x24,
-	0x43, 0x57, 0x87, 0x5a, 0x5f, 0x39, 0xad, 0x95, 0x29, 0x9e, 0xd4, 0x07, 0x70, 0x04, 0x43, 0xd9,
-	0x47, 0x8b, 0xbb, 0x04, 0xf8, 0x54, 0xe4, 0xfb, 0x58, 0xc5, 0x4f, 0x69, 0x6c, 0x30, 0x7f, 0x8b,
-	0x31, 0x4e, 0xe0, 0x34, 0x4a, 0x53, 0xd5, 0x85, 0x55, 0x65, 0xc1, 0x28, 0x0a, 0xd5, 0x57, 0x20,
-	0x1b, 0x74, 0x15, 0xab, 0xef, 0x23, 0x00, 0x77, 0xfd, 0x90, 0x24, 0x94, 0x31, 0xd9, 0xcb, 0x23,
-	0x06, 0x0a, 0x37, 0x96, 0xbb, 0x5d, 0xb9, 0xd3, 0x69, 0x50, 0x00, 0x7f, 0x80, 0x89, 0x11, 0xaf,
-	0xa5, 0x1e, 0x62, 0x63, 0xb5, 0x62, 0x23, 0x78, 0x1a, 0xb3, 0xb2, 0x90, 0x8d, 0xc7, 0x44, 0x23,
-	0x5c, 0x02, 0x8a, 0xd2, 0xb4, 0x6e, 0xa2, 0x95, 0xbe, 0xac, 0xd3, 0xaa, 0xc5, 0x1e, 0x79, 0x55,
-	0xa7, 0xf9, 0x1f, 0x25, 0xcf, 0x7f, 0xf5, 0xc0, 0x59, 0xc9, 0x5e, 0xe8, 0x06, 0xfc, 0x15, 0xe5,
-	0x3a, 0x37, 0xe7, 0xed, 0x9c, 0xa8, 0x75, 0xa6, 0x93, 0x16, 0xcb, 0xf0, 0x09, 0x7a, 0x0d, 0xde,
-	0x8a, 0x72, 0x95, 0x81, 0xff, 0x5a, 0x16, 0xea, 0x2b, 0xe3, 0x26, 0x29, 0x6e, 0xcc, 0xc1, 0xd5,
-	0x6f, 0x02, 0xb5, 0x3c, 0x9f, 0xfe, 0x6f, 0x50, 0xe7, 0x45, 0xe1, 0x13, 0xf4, 0x0e, 0x86, 0x42,
-	0x9a, 0x09, 0xcf, 0x45, 0x77, 0x7d, 0x3d, 0xeb, 0xac, 0xc3, 0x8b, 0x71, 0xef, 0x01, 0x0e, 0x8e,
-	0xa2, 0xae, 0x71, 0xd3, 0x69, 0x63, 0x68, 0xc7, 0x76, 0x7c, 0xf2, 0xd9, 0x91, 0x7f, 0xd0, 0x9b,
-	0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x92, 0x2a, 0x77, 0x65, 0x51, 0x05, 0x00, 0x00,
+	// 623 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0x5b, 0x6e, 0xd3, 0x40,
+	0x14, 0x8d, 0xe3, 0xc4, 0xb1, 0x6f, 0x92, 0x02, 0x43, 0x29, 0x96, 0x85, 0x2a, 0x6b, 0x04, 0x22,
+	0xe2, 0x23, 0x42, 0x45, 0xe5, 0xf1, 0x83, 0x6a, 0x29, 0x51, 0xd4, 0x8f, 0x02, 0x9a, 0x74, 0x03,
+	0x26, 0x1e, 0x25, 0x06, 0xc7, 0x36, 0x99, 0x69, 0x4b, 0x56, 0xc3, 0x26, 0x58, 0x11, 0x2b, 0x41,
+	0xf3, 0xb2, 0x9d, 0x26, 0x3f, 0xfd, 0x9b, 0x73, 0xe6, 0xfa, 0xde, 0x33, 0xe7, 0x1e, 0x19, 0x06,
+	0xcb, 0x22, 0x2b, 0x7f, 0xd0, 0x71, 0xb9, 0x29, 0x78, 0x81, 0x1c, 0x85, 0x70, 0x0f, 0xba, 0xd3,
+	0x75, 0xc9, 0xb7, 0xf8, 0x8f, 0x05, 0xde, 0x37, 0x71, 0x35, 0x5f, 0x15, 0x77, 0xe8, 0x08, 0xda,
+	0x97, 0x13, 0xdf, 0x0a, 0xad, 0x91, 0x47, 0xda, 0x97, 0x13, 0x84, 0xa0, 0xf3, 0x25, 0x5e, 0x53,
+	0xbf, 0x2d, 0x19, 0x79, 0x46, 0x27, 0xe0, 0x10, 0xba, 0xa4, 0xbf, 0x4b, 0xdf, 0x96, 0xac, 0x46,
+	0x82, 0x8f, 0x16, 0x3c, 0xbd, 0xa5, 0x7e, 0x27, 0xb4, 0x46, 0x2e, 0xd1, 0x08, 0xbd, 0x84, 0xe1,
+	0xb4, 0x4c, 0x59, 0x91, 0xd0, 0x34, 0xe1, 0xdb, 0x92, 0xfa, 0x5d, 0xf9, 0xd9, 0x2e, 0x89, 0x7c,
+	0xe8, 0x5d, 0xa5, 0x79, 0xba, 0x8e, 0x33, 0xdf, 0x09, 0xad, 0xd1, 0x90, 0x18, 0x88, 0x57, 0x00,
+	0x52, 0xe0, 0xf4, 0x96, 0xe6, 0x7c, 0x4f, 0xe1, 0x0b, 0xf0, 0xae, 0xd3, 0x35, 0x65, 0x3c, 0x5e,
+	0x97, 0x52, 0xa6, 0x4d, 0x6a, 0x42, 0x74, 0xdd, 0xd0, 0x2c, 0xe6, 0x34, 0xf1, 0xed, 0xd0, 0x1e,
+	0x79, 0xc4, 0x40, 0xf1, 0xb2, 0x49, 0xcc, 0x63, 0xa9, 0xd5, 0x23, 0xf2, 0x8c, 0xff, 0x59, 0x30,
+	0x50, 0xa3, 0x94, 0xb4, 0xbd, 0x61, 0xc7, 0xd0, 0xbd, 0x4e, 0x79, 0x66, 0xfc, 0x50, 0x40, 0x3c,
+	0x5c, 0x98, 0x97, 0x26, 0xc6, 0x10, 0x85, 0x44, 0x75, 0x94, 0x24, 0x34, 0x91, 0x33, 0x6c, 0xa2,
+	0x00, 0x3a, 0x05, 0xb8, 0x8a, 0x97, 0x39, 0xe5, 0x59, 0x9a, 0xff, 0xd4, 0x5e, 0x34, 0x18, 0xf1,
+	0xa0, 0xca, 0x19, 0x69, 0x85, 0x47, 0x6a, 0x42, 0x7c, 0x3d, 0x29, 0xee, 0xf2, 0xac, 0x88, 0x45,
+	0xe3, 0x9e, 0x34, 0xba, 0xc1, 0xa0, 0x10, 0xfa, 0x06, 0xa5, 0xf9, 0xd2, 0x77, 0x65, 0x41, 0x93,
+	0xc2, 0x9f, 0xa0, 0x5f, 0xdb, 0xc9, 0xd0, 0x1b, 0x70, 0xd4, 0xc9, 0xb7, 0x42, 0x7b, 0xd4, 0x3f,
+	0x43, 0x63, 0x9d, 0x97, 0xba, 0x88, 0xe8, 0x0a, 0xfc, 0x1e, 0x06, 0x8a, 0xa0, 0xbf, 0x6e, 0x28,
+	0xe3, 0xe8, 0x31, 0xd8, 0x51, 0x96, 0x49, 0x7f, 0x5c, 0x22, 0x8e, 0xe2, 0xc9, 0xf3, 0x34, 0x5f,
+	0x50, 0xbd, 0x09, 0x05, 0xf0, 0xb9, 0xde, 0xa0, 0xf0, 0x85, 0xa1, 0xd7, 0xd0, 0x95, 0x07, 0x3d,
+	0xf0, 0xc9, 0xce, 0x40, 0x71, 0x43, 0xd4, 0x3d, 0x8e, 0x60, 0xd8, 0xdc, 0x06, 0x43, 0x6f, 0xc1,
+	0x35, 0x67, 0xfd, 0xf1, 0xf1, 0xae, 0x5a, 0x75, 0x49, 0xaa, 0x2a, 0x1c, 0x41, 0x5f, 0x76, 0xd4,
+	0x82, 0x4f, 0x01, 0xbe, 0xe6, 0xd9, 0x36, 0x56, 0x31, 0x55, 0xba, 0x1b, 0xcc, 0xa1, 0xb8, 0xe3,
+	0x15, 0x3c, 0x8a, 0x92, 0x44, 0x75, 0x61, 0x65, 0x91, 0x33, 0x8a, 0x5e, 0x41, 0x47, 0x60, 0xd9,
+	0xe0, 0xe0, 0x03, 0xe4, 0xb5, 0x08, 0xdf, 0xfc, 0x66, 0xb1, 0xa0, 0x8c, 0xc9, 0x86, 0x2e, 0x31,
+	0x50, 0xd8, 0x34, 0xdd, 0x6c, 0x8a, 0x8d, 0x0e, 0x8c, 0x02, 0xf8, 0x02, 0x8e, 0xcc, 0x0b, 0xb4,
+	0xde, 0x3a, 0x59, 0xd6, 0x4e, 0xb2, 0x04, 0x4f, 0x63, 0x56, 0xe4, 0xb2, 0xf1, 0x90, 0x68, 0x84,
+	0x39, 0xa0, 0x28, 0x49, 0xaa, 0x26, 0x5a, 0xee, 0x18, 0x7a, 0x9a, 0xd2, 0x8a, 0x0f, 0xbb, 0x66,
+	0x8a, 0x1e, 0xaa, 0xfb, 0xec, 0x6f, 0x1b, 0x9c, 0x99, 0x6c, 0x88, 0x3e, 0x82, 0x37, 0xa3, 0x5c,
+	0x47, 0xab, 0x1a, 0xd3, 0x0c, 0x4d, 0xf0, 0x74, 0x3f, 0x60, 0x0c, 0xb7, 0xd0, 0x39, 0xb8, 0x33,
+	0xca, 0x55, 0x42, 0xaa, 0x92, 0xc6, 0xee, 0x02, 0xb4, 0x67, 0xb3, 0xf8, 0xec, 0x03, 0xf4, 0xf4,
+	0x76, 0xd0, 0xfe, 0x1e, 0x82, 0xe7, 0x86, 0xba, 0xb7, 0x41, 0xdc, 0x42, 0x9f, 0xa1, 0x2f, 0x94,
+	0x9a, 0x68, 0x9d, 0x54, 0x5a, 0x77, 0x36, 0x10, 0x3c, 0x3b, 0x64, 0x95, 0x18, 0x7c, 0x01, 0x50,
+	0x5b, 0x8d, 0x0e, 0x3a, 0x1a, 0x04, 0x8d, 0xf1, 0xf7, 0x96, 0x82, 0x5b, 0xdf, 0x1d, 0xf9, 0x47,
+	0x7e, 0xf7, 0x3f, 0x00, 0x00, 0xff, 0xff, 0xcb, 0x27, 0xe1, 0x04, 0xa1, 0x05, 0x00, 0x00,
 }

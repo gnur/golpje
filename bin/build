@@ -5,14 +5,10 @@ function log {
 }
 
 log "generating proto shizzles"
-protoc --proto_path=./ -I../golpje/ --go_out=golpje golpje.proto
-
-log "Inserting storm shizzles"
-protoc-go-inject-tag -input=./golpje/golpje.pb.go &> /dev/null
+protoc --proto_path=./ -I../golpje/ --go_out=plugins=grpc:golpje/ golpje.proto
 
 log "updating dependencies"
 go get -d .
-
 log "building"
 mkdir -p dist
 go build -o dist/golpje *.go

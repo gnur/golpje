@@ -12,7 +12,12 @@ import (
 )
 
 // Event is a local Alias of the protobuf Event
-type Event golpje.Event
+type Event struct {
+	ID        string
+	Timestamp int64    `storm:"index"`
+	Related   []string `storm:"index"`
+	Data      string
+}
 
 // All returns all events
 func All() ([]Event, error) {
@@ -73,5 +78,25 @@ func (e Event) Print() {
 	fmt.Println("> ", e.Data)
 	if len(e.Related) > 0 {
 		fmt.Println("| Related: [", strings.Join(e.Related, "], ["), "]")
+	}
+}
+
+// FromProto translates a protoEvent to an Event that is used internally
+func FromProto(in *golpje.ProtoEvent) Event {
+	return Event{
+		ID:        in.ID,
+		Timestamp: in.Timestamp,
+		Related:   in.Related,
+		Data:      in.Data,
+	}
+}
+
+// ToProto converts an Event to a ProtoEvent
+func (e Event) ToProto() golpje.ProtoEvent {
+	return golpje.ProtoEvent{
+		ID:        e.ID,
+		Timestamp: e.Timestamp,
+		Related:   e.Related,
+		Data:      e.Data,
 	}
 }

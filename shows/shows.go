@@ -11,7 +11,26 @@ import (
 )
 
 // Show a local alias of the protobuf Show
-type Show golpje.Show
+type Show struct {
+	ID            string
+	Name          string
+	Regexp        string
+	Active        bool
+	Episodeidtype string
+	Minimal       uint32
+}
+
+// FromProto converts a proto message to a Show
+func FromProto(in *golpje.ProtoShow) Show {
+	return Show{
+		ID:            in.ID,
+		Name:          in.Name,
+		Regexp:        in.Regexp,
+		Active:        in.Active,
+		Episodeidtype: in.Episodeidtype,
+		Minimal:       in.Minimal,
+	}
+}
 
 // New creates a new show
 func New(name, regexp, episodeidtype string, active bool, minimal uint32) (string, error) {

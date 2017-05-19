@@ -7,6 +7,13 @@ import (
 	"time"
 
 	"github.com/gnur/golpje/events"
+	pb "github.com/gnur/golpje/golpje"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+)
+
+const (
+	address = "localhost:3222"
 )
 
 // EventCommand basic setup
@@ -21,6 +28,14 @@ func (c *EventCommand) Help() string {
 
 // Run actually runs the command
 func (c *EventCommand) Run(args []string) int {
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		fmt.Println(err.Error())
+		return 1
+	}
+	defer conn.Close()
+
+	client := pb.NewGolpjeClient(conn)
 
 	if len(args) == 0 {
 		args = []string{"list", "since", "24h"}
@@ -53,22 +68,34 @@ func (c *EventCommand) Run(args []string) int {
 		returnSince := listCommand.Duration("since", 24*time.Hour, "period from which to return events")
 
 		listCommand.Parse(args[1:])
-		var allevents []events.Event
+		var allevents *pb.ProtoEvents
 
+		req := pb.EventRequest{}
 		if *returnAll {
-			allevents, _ = events.All()
+			req.All = true
+			allevents, err = client.GetEvents(context.Background(), &req)
+			if err != nil {
+				fmt.Println(err.Error())
+				return 1
+			}
 			fmt.Println("Retrieving all events")
 		} else {
 			now := time.Now()
 			then := now.Add(-*returnSince)
+			req.All = false
+			req.Since = then.UnixNano()
 			fmt.Println("Retrieving events since", then)
-			allevents, _ = events.After(then)
+			allevents, err = client.GetEvents(context.Background(), &req)
+			if err != nil {
+				fmt.Println(err.Error())
+				return 1
+			}
 		}
-		for _, e := range allevents {
-			e.Print()
+
+		for _, e := range allevents.Events {
+			events.FromProto(e).Print()
 		}
 	}
-
 	return 0
 }
 
