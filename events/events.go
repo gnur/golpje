@@ -92,11 +92,12 @@ func FromProto(in *golpje.ProtoEvent) Event {
 }
 
 // ToProto converts an Event to a ProtoEvent
-func (e Event) ToProto() golpje.ProtoEvent {
-	return golpje.ProtoEvent{
+func (e Event) ToProto() *golpje.ProtoEvent {
+	eProto := golpje.ProtoEvent{
 		ID:        e.ID,
 		Timestamp: e.Timestamp,
 		Related:   e.Related,
 		Data:      e.Data,
 	}
+	return &eProto
 }

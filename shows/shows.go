@@ -20,18 +20,6 @@ type Show struct {
 	Minimal       uint32
 }
 
-// FromProto converts a proto message to a Show
-func FromProto(in *golpje.ProtoShow) Show {
-	return Show{
-		ID:            in.ID,
-		Name:          in.Name,
-		Regexp:        in.Regexp,
-		Active:        in.Active,
-		Episodeidtype: in.Episodeidtype,
-		Minimal:       in.Minimal,
-	}
-}
-
 // New creates a new show
 func New(name, regexp, episodeidtype string, active bool, minimal uint32) (string, error) {
 	var match Show
@@ -63,7 +51,7 @@ func All() ([]Show, error) {
 }
 
 // GetFromID retrieve a show from an UUID
-func GetFromID(uuid uuid.UUID) (Show, error) {
+func GetFromID(uuid string) (Show, error) {
 
 	var match Show
 
@@ -77,7 +65,6 @@ func GetFromID(uuid uuid.UUID) (Show, error) {
 
 // GetFromName retrieve a show from an UUID
 func GetFromName(name string) (Show, error) {
-
 	var match Show
 
 	err := database.Conn.One("name", name, &match)
@@ -85,11 +72,44 @@ func GetFromName(name string) (Show, error) {
 		return match, err
 	}
 	return match, nil
-
 }
 
 // Print provides a convenient way of pretty printing a show
 func (s Show) Print() {
 	fmt.Println("--------------")
 	fmt.Println(s.ID, s.Name, s.Active)
+}
+
+// ToProtoShows returns a proto shows from a single show
+func ToProtoShows(shows []Show) *golpje.ProtoShows {
+	var resp golpje.ProtoShows
+	for _, s := range shows {
+		resp.Shows = append(resp.Shows, s.ToProto())
+	}
+	return &resp
+}
+
+// FromProto converts a proto message to a Show
+func FromProto(in *golpje.ProtoShow) Show {
+	return Show{
+		ID:            in.ID,
+		Name:          in.Name,
+		Regexp:        in.Regexp,
+		Active:        in.Active,
+		Episodeidtype: in.Episodeidtype,
+		Minimal:       in.Minimal,
+	}
+}
+
+// ToProto converts a Show to a proto message
+func (s Show) ToProto() *golpje.ProtoShow {
+	sProto := golpje.ProtoShow{
+		ID:            s.ID,
+		Name:          s.Name,
+		Regexp:        s.Regexp,
+		Active:        s.Active,
+		Episodeidtype: s.Episodeidtype,
+		Minimal:       s.Minimal,
+	}
+	return &sProto
 }

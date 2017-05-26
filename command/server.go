@@ -7,6 +7,7 @@ import (
 
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
+	"github.com/gnur/golpje/shows"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -66,8 +67,7 @@ func (s *server) GetEvents(ctx context.Context, in *pb.EventRequest) (*pb.ProtoE
 
 	var retEvents []*pb.ProtoEvent
 	for _, event := range ev {
-		apEvent := event.ToProto()
-		retEvents = append(retEvents, &apEvent)
+		retEvents = append(retEvents, event.ToProto())
 	}
 	return &pb.ProtoEvents{
 		Events: retEvents,
@@ -75,11 +75,28 @@ func (s *server) GetEvents(ctx context.Context, in *pb.EventRequest) (*pb.ProtoE
 }
 
 func (s *server) GetShows(ctx context.Context, in *pb.ShowRequest) (*pb.ProtoShows, error) {
-	return &pb.ProtoShows{}, nil
+	var resp pb.ProtoShows
+	allShows, _ := shows.All()
+	for _, show := range allShows {
+		if (!in.Onlyactive || (in.Onlyactive && show.Active)) && (in.Name != "" && in.Name == show.Name) {
+			resp.Shows = append(resp.Shows, show.ToProto())
+		}
+	}
+
+	return &resp, nil
 }
 
 func (s *server) AddShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddShowResponse, error) {
-	return &pb.AddShowResponse{}, nil
+	var resp pb.AddShowResponse
+	uuid, err := shows.New(in.Name, in.Regexp, in.Episodeidtype, in.Active, in.Minimal)
+	if err != nil {
+		resp.Error = err.Error()
+	} else {
+		s, _ := shows.GetFromID(uuid)
+		resp.Show = s.ToProto()
+	}
+
+	return &resp, nil
 }
 
 func (s *server) GetEpisodes(ctx context.Context, in *pb.EpisodeRequest) (*pb.ProtoEpisodes, error) {
