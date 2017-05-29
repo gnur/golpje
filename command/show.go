@@ -3,10 +3,11 @@ package command
 import (
 	"flag"
 	"fmt"
-	"strings"
-	"time"
 
-	"github.com/gnur/golpje/events"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+
+	pb "github.com/gnur/golpje/golpje"
 )
 
 // ShowCommand basic setup
@@ -20,52 +21,81 @@ func (c *ShowCommand) Help() string {
 
 // Run actually runs the command
 func (c *ShowCommand) Run(args []string) int {
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		fmt.Println(err.Error())
+		return 1
+	}
+	defer conn.Close()
+
+	client := pb.NewGolpjeClient(conn)
 
 	if len(args) == 0 {
-		args = []string{"list", "since", "24h"}
+		args = []string{"list", "-all"}
 	}
 	if args[0] == "add" {
 		addCommand := flag.NewFlagSet("add", flag.ExitOnError)
 
-		eventText := addCommand.String("text", "dummy event", "text of the event to add")
-		relatedTags := addCommand.String("related", "", "comma separated list of related arns")
+		showName := addCommand.String("name", "none", "name of the show")
+		showRegexp := addCommand.String("regexp", "none", "regexp to match episodes against")
+		showEpisodeidtype := addCommand.String("type", "season", "release schedule of show [season|date]")
+		showActive := addCommand.Bool("active", true, "show status")
+		var showMinimal int
+		addCommand.IntVar(&showMinimal, "minseason", 0, "Minimal season to download")
 
 		addCommand.Parse(args[1:])
 
-		var related []string
-
-		if *relatedTags != "" {
-			related = strings.Split(*relatedTags, ",")
+		req := pb.ProtoShow{
+			Name:          *showName,
+			Regexp:        *showRegexp,
+			Episodeidtype: *showEpisodeidtype,
+			Active:        *showActive,
+			Minimal:       uint32(showMinimal),
 		}
 
-		id, err := events.New(*eventText, related)
+		id, err := client.AddShow(context.Background(), &req)
 		if err != nil {
 			fmt.Println(err.Error())
 		} else {
-			fmt.Println("added event with id: ", id)
+			fmt.Println("added Show with id: ", id)
+		}
+	} else if args[0] == "del" {
+		delCommand := flag.NewFlagSet("del", flag.ExitOnError)
+
+		showID := delCommand.String("id", "none", "uuid of the show to delete")
+
+		delCommand.Parse(args[1:])
+
+		req := pb.ProtoShow{
+			ID: *showID,
+		}
+
+		id, err := client.DelShow(context.Background(), &req)
+		if err != nil {
+			fmt.Println(err.Error())
+		} else {
+			fmt.Println("deleted Show with id: ", id)
 		}
 
 	} else if args[0] == "list" {
 		listCommand := flag.NewFlagSet("list", flag.ExitOnError)
 
-		returnAll := listCommand.Bool("all", false, "Return all events")
-		returnSince := listCommand.Duration("since", 24*time.Hour, "period from which to return events")
+		returnActive := listCommand.Bool("active", false, "return only active shows")
+		returnName := listCommand.String("name", "", "list only shows with this name")
 
 		listCommand.Parse(args[1:])
-		var allevents []events.Event
 
-		if *returnAll {
-			allevents, _ = events.All()
-			fmt.Println("Retrieving all events")
-		} else {
-			now := time.Now()
-			then := now.Add(-*returnSince)
-			fmt.Println("Retrieving events since", then)
-			allevents, _ = events.After(then)
+		var req pb.ShowRequest
+		req.Onlyactive = *returnActive
+		req.Name = *returnName
+		resp, err := client.GetShows(context.Background(), &req)
+
+		if err == nil {
+			for _, show := range resp.Shows {
+				fmt.Println(show.ID, show.Name)
+			}
 		}
-		for _, e := range allevents {
-			e.Print()
-		}
+
 	}
 
 	return 0

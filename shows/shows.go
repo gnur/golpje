@@ -60,7 +60,6 @@ func GetFromID(uuid string) (Show, error) {
 		return match, err
 	}
 	return match, nil
-
 }
 
 // GetFromName retrieve a show from an UUID
@@ -72,6 +71,11 @@ func GetFromName(name string) (Show, error) {
 		return match, err
 	}
 	return match, nil
+}
+
+// Delete removes a show from the database
+func (s Show) Delete() error {
+	return database.Conn.DeleteStruct(&s)
 }
 
 // Print provides a convenient way of pretty printing a show

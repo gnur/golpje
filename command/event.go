@@ -38,7 +38,7 @@ func (c *EventCommand) Run(args []string) int {
 	client := pb.NewGolpjeClient(conn)
 
 	if len(args) == 0 {
-		args = []string{"list", "since", "24h"}
+		args = []string{"list", "-since", "24h"}
 	}
 	if args[0] == "add" {
 		addCommand := flag.NewFlagSet("add", flag.ExitOnError)

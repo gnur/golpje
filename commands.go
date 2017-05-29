@@ -24,5 +24,8 @@ func init() {
 		"serve": func() (cli.Command, error) {
 			return &command.ServerCommand{}, nil
 		},
+		"show": func() (cli.Command, error) {
+			return &command.ShowCommand{}, nil
+		},
 	}
 }

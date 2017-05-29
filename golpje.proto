@@ -75,6 +75,7 @@ service Golpje {
 
     rpc GetShows (ShowRequest) returns (ProtoShows) {}
     rpc AddShow (ProtoShow) returns (AddShowResponse) {}
+    rpc DelShow (ProtoShow) returns (AddShowResponse) {}
 
     rpc GetEpisodes (EpisodeRequest) returns (ProtoEpisodes) {}
     rpc AddEpisode (ProtoEpisode) returns (AddEpisodeResponse) {}

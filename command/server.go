@@ -36,6 +36,8 @@ func (c *ServerCommand) Run(args []string) int {
 
 	if err != nil {
 		fmt.Println("IM NOTLISTENING!")
+		fmt.Println(err.Error())
+		return 1
 	}
 	s := grpc.NewServer()
 	pb.RegisterGolpjeServer(s, &server{})
@@ -78,7 +80,8 @@ func (s *server) GetShows(ctx context.Context, in *pb.ShowRequest) (*pb.ProtoSho
 	var resp pb.ProtoShows
 	allShows, _ := shows.All()
 	for _, show := range allShows {
-		if (!in.Onlyactive || (in.Onlyactive && show.Active)) && (in.Name != "" && in.Name == show.Name) {
+		fmt.Println(show.ID, show.Active)
+		if (!in.Onlyactive || (in.Onlyactive && show.Active)) && (in.Name == "" || in.Name == show.Name) {
 			resp.Shows = append(resp.Shows, show.ToProto())
 		}
 	}
@@ -94,6 +97,19 @@ func (s *server) AddShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddShowResp
 	} else {
 		s, _ := shows.GetFromID(uuid)
 		resp.Show = s.ToProto()
+	}
+
+	return &resp, nil
+}
+
+func (s *server) DelShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddShowResponse, error) {
+	var resp pb.AddShowResponse
+	show, err := shows.GetFromID(in.ID)
+	if err != nil {
+		resp.Error = err.Error()
+	} else {
+		resp.Show = show.ToProto()
+		show.Delete()
 	}
 
 	return &resp, nil
