@@ -21,8 +21,8 @@ func init() {
 				Test: "hoi",
 			}, nil
 		},
-		"serve": func() (cli.Command, error) {
-			return &command.ServerCommand{}, nil
+		"start": func() (cli.Command, error) {
+			return &command.ControllerCommand{}, nil
 		},
 		"show": func() (cli.Command, error) {
 			return &command.ShowCommand{}, nil
