@@ -10,6 +10,7 @@ import (
 
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
+	"github.com/gnur/golpje/searcher"
 	"github.com/gnur/golpje/shows"
 	"golang.org/x/net/context"
 )
@@ -19,7 +20,9 @@ const (
 )
 
 // controller is a stub
-type controller struct{}
+type controller struct {
+	Searchresults chan searcher.Searchresult
+}
 
 // Start commences the controller
 func Start() error {
@@ -30,14 +33,25 @@ func Start() error {
 		fmt.Println(err.Error())
 		return nil
 	}
+	var con controller
+	con.Searchresults = make(chan searcher.Searchresult)
+	go searcher.Start(con.Searchresults)
+	go resultsprinter(con.Searchresults)
 	s := grpc.NewServer()
-	pb.RegisterGolpjeServer(s, &controller{})
+	pb.RegisterGolpjeServer(s, &con)
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
 		fmt.Println("failed to serve")
 	}
 
 	return nil
+}
+
+func resultsprinter(ch chan searcher.Searchresult) {
+	for res := range ch {
+		fmt.Println(res.Title)
+		fmt.Println(res.ShowID)
+	}
 }
 
 func (con *controller) GetEvents(ctx context.Context, in *pb.EventRequest) (*pb.ProtoEvents, error) {
