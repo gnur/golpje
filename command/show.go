@@ -38,7 +38,7 @@ func (c *ShowCommand) Run(args []string) int {
 
 		showName := addCommand.String("name", "none", "name of the show")
 		showRegexp := addCommand.String("regexp", "none", "regexp to match episodes against")
-		showEpisodeidtype := addCommand.String("type", "season", "release schedule of show [season|date]")
+		showSeasonal := addCommand.Bool("seasonal", true, "if show is seasonal (false for shows like the daily show)")
 		showActive := addCommand.Bool("active", true, "show status")
 		var showMinimal int
 		addCommand.IntVar(&showMinimal, "minseason", 0, "Minimal season to download")
@@ -46,11 +46,11 @@ func (c *ShowCommand) Run(args []string) int {
 		addCommand.Parse(args[1:])
 
 		req := pb.ProtoShow{
-			Name:          *showName,
-			Regexp:        *showRegexp,
-			Episodeidtype: *showEpisodeidtype,
-			Active:        *showActive,
-			Minimal:       uint32(showMinimal),
+			Name:     *showName,
+			Regexp:   *showRegexp,
+			Seasonal: *showSeasonal,
+			Active:   *showActive,
+			Minimal:  uint32(showMinimal),
 		}
 
 		id, err := client.AddShow(context.Background(), &req)

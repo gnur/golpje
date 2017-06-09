@@ -12,16 +12,16 @@ import (
 
 // Show a local alias of the protobuf Show
 type Show struct {
-	ID            string
-	Name          string
-	Regexp        string
-	Active        bool
-	Episodeidtype string
-	Minimal       uint32
+	ID       string
+	Name     string
+	Regexp   string
+	Active   bool
+	Seasonal bool
+	Minimal  uint32
 }
 
 // New creates a new show
-func New(name, regexp, episodeidtype string, active bool, minimal uint32) (string, error) {
+func New(name, regexp string, seasonal, active bool, minimal uint32) (string, error) {
 	var match Show
 
 	err := database.Conn.One("Name", name, &match)
@@ -32,12 +32,12 @@ func New(name, regexp, episodeidtype string, active bool, minimal uint32) (strin
 	u1 := uuid.New()
 
 	s := Show{
-		ID:            u1.String(),
-		Name:          name,
-		Regexp:        regexp,
-		Episodeidtype: episodeidtype,
-		Active:        active,
-		Minimal:       minimal,
+		ID:       u1.String(),
+		Name:     name,
+		Regexp:   regexp,
+		Seasonal: seasonal,
+		Active:   active,
+		Minimal:  minimal,
 	}
 	err = database.Conn.Save(&s)
 	return s.ID, nil
@@ -96,24 +96,24 @@ func ToProtoShows(shows []Show) *golpje.ProtoShows {
 // FromProto converts a proto message to a Show
 func FromProto(in *golpje.ProtoShow) Show {
 	return Show{
-		ID:            in.ID,
-		Name:          in.Name,
-		Regexp:        in.Regexp,
-		Active:        in.Active,
-		Episodeidtype: in.Episodeidtype,
-		Minimal:       in.Minimal,
+		ID:       in.ID,
+		Name:     in.Name,
+		Regexp:   in.Regexp,
+		Active:   in.Active,
+		Seasonal: in.Seasonal,
+		Minimal:  in.Minimal,
 	}
 }
 
 // ToProto converts a Show to a proto message
 func (s Show) ToProto() *golpje.ProtoShow {
 	sProto := golpje.ProtoShow{
-		ID:            s.ID,
-		Name:          s.Name,
-		Regexp:        s.Regexp,
-		Active:        s.Active,
-		Episodeidtype: s.Episodeidtype,
-		Minimal:       s.Minimal,
+		ID:       s.ID,
+		Name:     s.Name,
+		Regexp:   s.Regexp,
+		Active:   s.Active,
+		Seasonal: s.Seasonal,
+		Minimal:  s.Minimal,
 	}
 	return &sProto
 }

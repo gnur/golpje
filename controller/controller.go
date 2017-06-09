@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -36,7 +37,7 @@ func Start() error {
 	var con controller
 	con.Searchresults = make(chan searcher.Searchresult)
 	go searcher.Start(con.Searchresults)
-	go resultsprinter(con.Searchresults)
+	go con.resulthandler()
 	s := grpc.NewServer()
 	pb.RegisterGolpjeServer(s, &con)
 	reflection.Register(s)
@@ -47,8 +48,11 @@ func Start() error {
 	return nil
 }
 
-func resultsprinter(ch chan searcher.Searchresult) {
-	for res := range ch {
+func (con *controller) resulthandler() {
+	for res := range con.Searchresults {
+		if !res.Vipuser || res.Seeders < 10 || !strings.Contains(res.Title, "264") {
+			continue
+		}
 		fmt.Println(res.Title)
 		fmt.Println(res.ShowID)
 	}
@@ -91,7 +95,7 @@ func (con *controller) GetShows(ctx context.Context, in *pb.ShowRequest) (*pb.Pr
 
 func (con *controller) AddShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddShowResponse, error) {
 	var resp pb.AddShowResponse
-	uuid, err := shows.New(in.Name, in.Regexp, in.Episodeidtype, in.Active, in.Minimal)
+	uuid, err := shows.New(in.Name, in.Regexp, in.Seasonal, in.Active, in.Minimal)
 	if err != nil {
 		resp.Error = err.Error()
 	} else {

@@ -9,7 +9,7 @@ message ProtoShow {
     string Name = 2;
     string Regexp = 3;
     bool Active = 4;
-    string Episodeidtype = 5;
+    bool Seasonal = 5;
     uint32 Minimal = 6;
 }
 
