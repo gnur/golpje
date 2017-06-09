@@ -12,6 +12,9 @@ go get -d .
 log "building"
 mkdir -p dist
 go build -o dist/golpje *.go
+if [[ $? -ne 0 ]]; then
+   echo "Build failed, stopping now"
+fi
 
 log "starting"
 echo '---------------------------------'
