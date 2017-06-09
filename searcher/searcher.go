@@ -28,12 +28,12 @@ func Start(results chan Searchresult) {
 		}
 		for _, show := range shows {
 			events.New(fmt.Sprintf("Searching for new episodes of %s", show.Name), []string{show.ID})
-			_, torrents := gopiratebay.Search(show.Name)
+			torrents, _ := piratebay.Search(show.Name)
 			for _, torrent := range torrents {
 				results <- Searchresult{
 					Title:      torrent.Title,
-					Magnetlink: torrent.Magnetlink,
-					Vipuser:    torrent.Vipuser,
+					Magnetlink: torrent.MagnetLink,
+					Vipuser:    torrent.VIP,
 					Seeders:    torrent.Seeders,
 					ShowID:     show.ID,
 				}

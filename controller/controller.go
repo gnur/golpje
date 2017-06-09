@@ -50,11 +50,15 @@ func Start() error {
 
 func (con *controller) resulthandler() {
 	for res := range con.Searchresults {
-		if !res.Vipuser || res.Seeders < 10 || !strings.Contains(res.Title, "264") {
-			continue
+		fmt.Println("--------------")
+		if res.Seeders > 10 && strings.Contains(res.Title, "264") {
+			fmt.Println("yes: ")
+			fmt.Println(res.Title)
+		} else {
+			fmt.Println("nope: ")
+			fmt.Println("seeders: ", res.Seeders)
+			fmt.Println(res.Title)
 		}
-		fmt.Println(res.Title)
-		fmt.Println(res.ShowID)
 	}
 }
 
