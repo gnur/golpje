@@ -3,6 +3,7 @@ package shows
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -153,7 +154,6 @@ func (s Show) ShouldDownload(title string) bool {
 
 // AddDownload adds an episode to a show
 func (s Show) AddDownload(title, magnetlink string) (string, error) {
-	fmt.Println("adding download")
 
 	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
@@ -161,4 +161,37 @@ func (s Show) AddDownload(title, magnetlink string) (string, error) {
 	}
 
 	return episodes.New(title, s.ID, episodeID, magnetlink, false, true)
+}
+
+// AddEpisode adds an episode from the filesystem to a show
+func (s Show) AddEpisode(title string) (string, error) {
+
+	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
+	if err != nil {
+		return "", err
+	}
+
+	return episodes.New(title, s.ID, episodeID, "fs", true, false)
+}
+
+// DeleteAllEpisodes removes all episodes from the datastore
+func (s Show) DeleteAllEpisodes() error {
+
+	query := database.Conn.Select(q.Eq("Showid", s.ID))
+	var episodes []episodes.Episode
+	err := query.Find(&episodes)
+	if err != nil {
+		return err
+	}
+	err = nil
+	for _, episode := range episodes {
+		fmt.Println("Removing ", episode.Title)
+		err = database.Conn.DeleteStruct(&episode)
+	}
+	return err
+}
+
+// Path returns the directory in which all shows are located
+func (s Show) Path(showBasePath string) string {
+	return filepath.Join(showBasePath, s.Name)
 }

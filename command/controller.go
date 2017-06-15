@@ -1,10 +1,13 @@
 package command
 
-import "github.com/gnur/golpje/controller"
+import (
+	"github.com/gnur/golpje/controller"
+	"github.com/spf13/viper"
+)
 
 // ControllerCommand basic setup
 type ControllerCommand struct {
-	Test string
+	Cfg *viper.Viper
 }
 
 // Help returns the help for this command
@@ -14,7 +17,7 @@ func (c *ControllerCommand) Help() string {
 
 // Run actually runs the command
 func (c *ControllerCommand) Run(args []string) int {
-	err := controller.Start()
+	err := controller.Start(c.Cfg)
 	if err != nil {
 		return 1
 	}

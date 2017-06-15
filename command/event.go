@@ -8,6 +8,7 @@ import (
 
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
+	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -18,7 +19,7 @@ const (
 
 // EventCommand basic setup
 type EventCommand struct {
-	Test string
+	Cfg *viper.Viper
 }
 
 // Help returns the help for this command

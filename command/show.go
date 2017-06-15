@@ -8,10 +8,12 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/gnur/golpje/golpje"
+	"github.com/spf13/viper"
 )
 
 // ShowCommand basic setup
 type ShowCommand struct {
+	Cfg *viper.Viper
 }
 
 // Help returns the help for this command
@@ -94,7 +96,22 @@ func (c *ShowCommand) Run(args []string) int {
 				fmt.Println(show.ID, show.Name)
 			}
 		}
+	} else if args[0] == "sync" {
+		syncCommand := flag.NewFlagSet("sync", flag.ExitOnError)
 
+		showUUID := syncCommand.String("uuid", "", "sync episodes of show with this id")
+
+		syncCommand.Parse(args[1:])
+
+		var req pb.SyncShowRequest
+		req.ShowID = *showUUID
+		resp, err := client.SyncShow(context.Background(), &req)
+
+		if err == nil {
+			fmt.Println(resp.FoundEpisodes)
+			fmt.Println(resp.Success)
+			fmt.Println(resp.Error)
+		}
 	}
 
 	return 0

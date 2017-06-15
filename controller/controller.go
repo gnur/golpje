@@ -3,6 +3,8 @@ package controller
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	pb "github.com/gnur/golpje/golpje"
 	"github.com/gnur/golpje/searcher"
 	"github.com/gnur/golpje/shows"
+	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 )
 
@@ -25,10 +28,11 @@ const (
 type controller struct {
 	Searchresults   chan searcher.Searchresult
 	DownloadChannel chan downloader.Download
+	config          *viper.Viper
 }
 
 // Start commences the controller
-func Start() error {
+func Start(config *viper.Viper) error {
 	lis, err := net.Listen("tcp", port)
 
 	if err != nil {
@@ -37,10 +41,13 @@ func Start() error {
 		return nil
 	}
 	var con controller
+	con.config = config
 	con.Searchresults = make(chan searcher.Searchresult)
 	con.DownloadChannel = make(chan downloader.Download)
 	go downloader.Start(con.DownloadChannel)
-	go searcher.Start(con.Searchresults)
+	if con.config.Get("search_enabled") == "true" {
+		go searcher.Start(con.Searchresults)
+	}
 	go con.resulthandler()
 	s := grpc.NewServer()
 	pb.RegisterGolpjeServer(s, &con)
@@ -139,6 +146,32 @@ func (con *controller) DelShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddSh
 
 func (con *controller) GetEpisodes(ctx context.Context, in *pb.EpisodeRequest) (*pb.ProtoEpisodes, error) {
 	return &pb.ProtoEpisodes{}, nil
+}
+
+func (con *controller) SyncShow(ctx context.Context, in *pb.SyncShowRequest) (*pb.SyncShowResponse, error) {
+	//get show
+	//remove all episodes
+	//loop over all files and add episodes as downloaded
+	show, err := shows.GetFromID(in.ShowID)
+	if err != nil {
+		return &pb.SyncShowResponse{
+			Error: err.Error(),
+		}, nil
+	}
+	show.DeleteAllEpisodes()
+	showdir := show.Path(con.config.GetString("shows_path"))
+	fmt.Println(showdir)
+	filepath.Walk(showdir, func(path string, info os.FileInfo, err error) error {
+		if err == nil {
+			if !info.IsDir() {
+				fmt.Println(info.Name())
+				show.AddEpisode(info.Name())
+			}
+		}
+		return nil
+	})
+
+	return &pb.SyncShowResponse{}, nil
 }
 
 func (con *controller) AddEpisode(ctx context.Context, in *pb.ProtoEpisode) (*pb.AddEpisodeResponse, error) {

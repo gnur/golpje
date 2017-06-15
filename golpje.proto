@@ -70,12 +70,23 @@ message AddEpisodeResponse {
     string Error = 3;
 }
 
+message SyncShowResponse {
+    int64 FoundEpisodes = 1;
+    bool Success = 2;
+    string Error = 3;
+}
+
+message SyncShowRequest {
+    string ShowID = 1;
+}
+
 service Golpje {
     rpc GetEvents (EventRequest) returns (ProtoEvents) {}
 
     rpc GetShows (ShowRequest) returns (ProtoShows) {}
     rpc AddShow (ProtoShow) returns (AddShowResponse) {}
     rpc DelShow (ProtoShow) returns (AddShowResponse) {}
+    rpc SyncShow (SyncShowRequest) returns (SyncShowResponse) {}
 
     rpc GetEpisodes (EpisodeRequest) returns (ProtoEpisodes) {}
     rpc AddEpisode (ProtoEpisode) returns (AddEpisodeResponse) {}
