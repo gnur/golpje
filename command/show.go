@@ -40,8 +40,7 @@ func (c *ShowCommand) Run(args []string) int {
 		showRegexp := addCommand.String("regexp", "none", "regexp to match episodes against")
 		showSeasonal := addCommand.Bool("seasonal", true, "if show is seasonal (false for shows like the daily show)")
 		showActive := addCommand.Bool("active", true, "show status")
-		var showMinimal int
-		addCommand.IntVar(&showMinimal, "minseason", 0, "Minimal season to download")
+		showMinimal := addCommand.Int64("minseason", 0, "Minimal season to download")
 
 		addCommand.Parse(args[1:])
 
@@ -50,7 +49,7 @@ func (c *ShowCommand) Run(args []string) int {
 			Regexp:   *showRegexp,
 			Seasonal: *showSeasonal,
 			Active:   *showActive,
-			Minimal:  uint32(showMinimal),
+			Minimal:  *showMinimal,
 		}
 
 		id, err := client.AddShow(context.Background(), &req)

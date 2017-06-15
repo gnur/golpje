@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/asdine/storm"
+	"github.com/asdine/storm/q"
 	"github.com/gnur/golpje/database"
+	"github.com/gnur/golpje/episodes"
 	"github.com/gnur/golpje/golpje"
 	"github.com/google/uuid"
 )
@@ -17,11 +19,11 @@ type Show struct {
 	Regexp   string
 	Active   bool
 	Seasonal bool
-	Minimal  uint32
+	Minimal  int64
 }
 
 // New creates a new show
-func New(name, regexp string, seasonal, active bool, minimal uint32) (string, error) {
+func New(name, regexp string, seasonal, active bool, minimal int64) (string, error) {
 	var match Show
 
 	err := database.Conn.One("Name", name, &match)
@@ -116,4 +118,47 @@ func (s Show) ToProto() *golpje.ProtoShow {
 		Minimal:  s.Minimal,
 	}
 	return &sProto
+}
+
+// ShouldDownload returns if the episode has not been downloaded yet and still should
+func (s Show) ShouldDownload(title string) bool {
+
+	episodeid, err := episodes.ExtractEpisodeID(title, s.Seasonal)
+	if err != nil {
+		fmt.Println(err.Error())
+		return false
+	}
+	if !episodes.NewEnough(episodeid, s.Minimal, s.Seasonal) {
+		return false
+	}
+
+	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeid))
+
+	var episodes []episodes.Episode
+	err = query.Find(&episodes)
+
+	if err != nil && err.Error() != "not found" {
+		fmt.Println(err.Error())
+		return false
+	}
+
+	for _, episode := range episodes {
+		if episode.Downloading || episode.Downloaded {
+			return false
+		}
+	}
+
+	return true
+}
+
+// AddDownload adds an episode to a show
+func (s Show) AddDownload(title, magnetlink string) (string, error) {
+	fmt.Println("adding download")
+
+	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
+	if err != nil {
+		return "", err
+	}
+
+	return episodes.New(title, s.ID, episodeID, magnetlink, false, true)
 }

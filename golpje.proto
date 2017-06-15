@@ -10,7 +10,7 @@ message ProtoShow {
     string Regexp = 3;
     bool Active = 4;
     bool Seasonal = 5;
-    uint32 Minimal = 6;
+    int64 Minimal = 6;
 }
 
 message ProtoEvent {

@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/gnur/golpje/downloader"
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
 	"github.com/gnur/golpje/searcher"
@@ -22,7 +23,8 @@ const (
 
 // controller is a stub
 type controller struct {
-	Searchresults chan searcher.Searchresult
+	Searchresults   chan searcher.Searchresult
+	DownloadChannel chan downloader.Download
 }
 
 // Start commences the controller
@@ -36,6 +38,8 @@ func Start() error {
 	}
 	var con controller
 	con.Searchresults = make(chan searcher.Searchresult)
+	con.DownloadChannel = make(chan downloader.Download)
+	go downloader.Start(con.DownloadChannel)
 	go searcher.Start(con.Searchresults)
 	go con.resulthandler()
 	s := grpc.NewServer()
@@ -52,12 +56,22 @@ func (con *controller) resulthandler() {
 	for res := range con.Searchresults {
 		fmt.Println("--------------")
 		if res.Seeders > 10 && strings.Contains(res.Title, "264") {
-			fmt.Println("yes: ")
-			fmt.Println(res.Title)
-		} else {
-			fmt.Println("nope: ")
-			fmt.Println("seeders: ", res.Seeders)
-			fmt.Println(res.Title)
+			fmt.Println(res.ShowID, res.Title)
+			show, err := shows.GetFromID(res.ShowID)
+			if err != nil {
+				fmt.Println("continuing")
+				continue
+			}
+			if show.ShouldDownload(res.Title) {
+				fmt.Println("yes: ")
+				fmt.Println(res.Title)
+				downloadID, err := show.AddDownload(res.Title, res.Magnetlink)
+				if err == nil {
+					events.New(fmt.Sprintf("Starting download of%s", res.Title), []string{res.ShowID, downloadID})
+					fmt.Println("starting download")
+					fmt.Println(downloadID)
+				}
+			}
 		}
 	}
 }
