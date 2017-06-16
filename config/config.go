@@ -23,5 +23,7 @@ func loadDefaults(v *viper.Viper) {
 	v.SetDefault("shows_path", "./shows/")
 	v.SetDefault("download_path", "/tmp/golpje/")
 	v.SetDefault("database_file", "golpje.db")
+	v.SetDefault("port", ":3222")
+	v.SetDefault("cli_address", "localhost:3222")
 	v.SetDefault("search_enabled", true)
 }

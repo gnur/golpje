@@ -21,10 +21,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	port = ":3222"
-)
-
 // controller is a stub
 type controller struct {
 	Searchresults   chan searcher.Searchresult
@@ -34,15 +30,15 @@ type controller struct {
 
 // Start commences the controller
 func Start(config *viper.Viper) error {
-	lis, err := net.Listen("tcp", port)
+	var con controller
+	con.config = config
+	lis, err := net.Listen("tcp", con.config.GetString("port"))
 
 	if err != nil {
 		fmt.Println("IM NOTLISTENING!")
 		fmt.Println(err.Error())
 		return nil
 	}
-	var con controller
-	con.config = config
 	con.Searchresults = make(chan searcher.Searchresult)
 	con.DownloadChannel = make(chan downloader.Download, 40) //buffered channel so it doesn't block and queues new downloads
 	go downloader.Start(con.DownloadChannel)

@@ -13,10 +13,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	address = "localhost:3222"
-)
-
 // EventCommand basic setup
 type EventCommand struct {
 	Cfg *viper.Viper
@@ -29,7 +25,7 @@ func (c *EventCommand) Help() string {
 
 // Run actually runs the command
 func (c *EventCommand) Run(args []string) int {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(c.Cfg.GetString("cli_address"), grpc.WithInsecure())
 	if err != nil {
 		fmt.Println(err.Error())
 		return 1

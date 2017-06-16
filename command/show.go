@@ -23,7 +23,7 @@ func (c *ShowCommand) Help() string {
 
 // Run actually runs the command
 func (c *ShowCommand) Run(args []string) int {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(c.Cfg.GetString("cli_address"), grpc.WithInsecure())
 	if err != nil {
 		fmt.Println(err.Error())
 		return 1
