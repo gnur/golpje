@@ -21,6 +21,7 @@ func Load() (*viper.Viper, error) {
 func loadDefaults(v *viper.Viper) {
 
 	v.SetDefault("shows_path", "./shows/")
+	v.SetDefault("download_path", "/tmp/golpje/")
 	v.SetDefault("database_file", "golpje.db")
-	v.SetDefault("search_enabled", false)
+	v.SetDefault("search_enabled", true)
 }

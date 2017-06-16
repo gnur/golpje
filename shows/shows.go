@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -163,6 +164,29 @@ func (s Show) AddDownload(title, magnetlink string) (string, error) {
 	return episodes.New(title, s.ID, episodeID, magnetlink, false, true)
 }
 
+// SetDownloaded changes the state of an episode to downloaded
+func (s Show) SetDownloaded(title string) error {
+
+	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
+	if err != nil {
+		return err
+	}
+
+	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeID), q.Eq("Downloading", true))
+
+	var episodes []episodes.Episode
+	err = query.Find(&episodes)
+
+	for _, episode := range episodes {
+		fmt.Println("Marking as done: ", title)
+		episode.Downloaded = true
+		episode.Downloading = false
+		err = database.Conn.Update(&episode)
+	}
+	return err
+
+}
+
 // AddEpisode adds an episode from the filesystem to a show
 func (s Show) AddEpisode(title string) (string, error) {
 
@@ -194,4 +218,23 @@ func (s Show) DeleteAllEpisodes() error {
 // Path returns the directory in which all shows are located
 func (s Show) Path(showBasePath string) string {
 	return filepath.Join(showBasePath, s.Name)
+}
+
+// GetSeasonDir returns the seasonal directory where episodes with given title are stored
+func (s Show) GetSeasonDir(title, showBasePath string) string {
+
+	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
+	if err != nil {
+		return filepath.Join(showBasePath, "specials")
+	}
+
+	var seasonDir string
+	if s.Seasonal {
+		seasonDir = episodeID[:7]
+	} else {
+		season, _ := strconv.ParseInt(episodeID[1:3], 10, 64)
+		seasonDir = fmt.Sprintf("season %02d", season)
+	}
+
+	return filepath.Join(showBasePath, seasonDir)
 }

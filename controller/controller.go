@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/anacrolix/torrent"
 	"github.com/gnur/golpje/downloader"
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
@@ -43,9 +44,9 @@ func Start(config *viper.Viper) error {
 	var con controller
 	con.config = config
 	con.Searchresults = make(chan searcher.Searchresult)
-	con.DownloadChannel = make(chan downloader.Download)
+	con.DownloadChannel = make(chan downloader.Download, 40) //buffered channel so it doesn't block and queues new downloads
 	go downloader.Start(con.DownloadChannel)
-	if con.config.Get("search_enabled") == "true" {
+	if con.config.GetBool("search_enabled") {
 		go searcher.Start(con.Searchresults)
 	}
 	go con.resulthandler()
@@ -74,9 +75,59 @@ func (con *controller) resulthandler() {
 				fmt.Println(res.Title)
 				downloadID, err := show.AddDownload(res.Title, res.Magnetlink)
 				if err == nil {
-					events.New(fmt.Sprintf("Starting download of%s", res.Title), []string{res.ShowID, downloadID})
+					events.New(fmt.Sprintf("Starting download of %s", res.Title), []string{res.ShowID, downloadID})
 					fmt.Println("starting download")
 					fmt.Println(downloadID)
+					resultChannel := make(chan downloader.Result)
+					downloadPath := fmt.Sprintf("%s/%s", con.config.GetString("download_path"), downloadID)
+					dl := downloader.Download{
+						Magnetlink:    res.Magnetlink,
+						DownloadDir:   downloadPath,
+						ResultChannel: resultChannel,
+					}
+					fmt.Println("sending download to channel")
+					con.DownloadChannel <- dl
+					fmt.Println("waiting for result")
+					downloadResult := <-resultChannel
+					if downloadResult.Completed {
+						fmt.Println("download completed")
+						var largestFile torrent.File
+						var largest int64
+						largest = 0
+						for _, f := range downloadResult.Files {
+							fmt.Println(f.Path())
+							if f.Length() > largest {
+								largest = f.Length()
+								largestFile = f
+							}
+						}
+						fmt.Println("setting as downloaded: ", res.Title)
+						showPath := show.Path(con.config.GetString("shows_path"))
+						targetDir := show.GetSeasonDir(res.Title, showPath)
+						targetName := filepath.Join(targetDir, filepath.Base(largestFile.Path()))
+						sourceName := filepath.Join(downloadPath, largestFile.Path())
+						fmt.Println("printing a lot of paths now..")
+						fmt.Println(showPath)
+						fmt.Println(targetDir)
+						fmt.Println(sourceName)
+						fmt.Println(targetName)
+						err := os.MkdirAll(filepath.Dir(targetName), 0777)
+						if err != nil {
+							fmt.Println("mkdirall error: ", err.Error())
+							continue
+						}
+
+						err = os.Rename(sourceName, targetName)
+						if err != nil {
+							fmt.Println("rename error: ", err.Error())
+							continue
+						}
+						events.New(fmt.Sprintf("Completed download of %s", res.Title), []string{res.ShowID, downloadID})
+						show.SetDownloaded(res.Title)
+
+					} else {
+						fmt.Println("download did not complete: ", downloadResult.Error)
+					}
 				}
 			}
 		}
