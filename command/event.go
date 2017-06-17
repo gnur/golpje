@@ -1,10 +1,11 @@
 package command
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"time"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"

@@ -1,9 +1,9 @@
 package command
 
 import (
-	"flag"
 	"fmt"
 
+	flag "github.com/spf13/pflag"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -38,10 +38,10 @@ func (c *ShowCommand) Run(args []string) int {
 	if args[0] == "add" {
 		addCommand := flag.NewFlagSet("add", flag.ExitOnError)
 
-		showName := addCommand.String("name", "none", "name of the show")
+		showName := addCommand.StringP("name", "n", "none", "name of the show")
 		showRegexp := addCommand.String("regexp", "none", "regexp to match episodes against")
-		showSeasonal := addCommand.Bool("seasonal", true, "if show is seasonal (false for shows like the daily show)")
-		showActive := addCommand.Bool("active", true, "show status")
+		showSeasonal := addCommand.Bool("seasonal", false, "if show is seasonal (false for shows like the daily show)")
+		showActive := addCommand.Bool("active", false, "show status")
 		showMinimal := addCommand.Int64("minseason", 0, "Minimal season to download")
 
 		addCommand.Parse(args[1:])
@@ -59,6 +59,13 @@ func (c *ShowCommand) Run(args []string) int {
 			fmt.Println(err.Error())
 		} else {
 			fmt.Println("added Show with id: ", id)
+			var req pb.SyncShowRequest
+			req.ShowID = id.Show.ID
+			resp, err := client.SyncShow(context.Background(), &req)
+
+			if err == nil && resp.Success {
+				fmt.Println("Synced ", resp.FoundEpisodes, " episodes")
+			}
 		}
 	} else if args[0] == "del" {
 		delCommand := flag.NewFlagSet("del", flag.ExitOnError)
@@ -94,6 +101,8 @@ func (c *ShowCommand) Run(args []string) int {
 		if err == nil {
 			for _, show := range resp.Shows {
 				fmt.Println(show.ID, show.Name)
+				fmt.Println(show)
+
 			}
 		}
 	} else if args[0] == "sync" {
@@ -107,10 +116,8 @@ func (c *ShowCommand) Run(args []string) int {
 		req.ShowID = *showUUID
 		resp, err := client.SyncShow(context.Background(), &req)
 
-		if err == nil {
-			fmt.Println(resp.FoundEpisodes)
-			fmt.Println(resp.Success)
-			fmt.Println(resp.Error)
+		if err == nil && resp.Success {
+			fmt.Println("Synced ", resp.FoundEpisodes, " episodes")
 		}
 	}
 

@@ -123,15 +123,14 @@ func (s Show) ToProto() *golpje.ProtoShow {
 }
 
 // ShouldDownload returns if the episode has not been downloaded yet and still should
-func (s Show) ShouldDownload(title string) bool {
+func (s Show) ShouldDownload(title string) (bool, error) {
 
 	episodeid, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
-		fmt.Println(err.Error())
-		return false
+		return false, err
 	}
 	if !episodes.NewEnough(episodeid, s.Minimal, s.Seasonal) {
-		return false
+		return false, fmt.Errorf("id: %s, minimal: %v, seasonal: %t", episodeid, s.Minimal, s.Seasonal)
 	}
 
 	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeid))
@@ -140,17 +139,18 @@ func (s Show) ShouldDownload(title string) bool {
 	err = query.Find(&episodes)
 
 	if err != nil && err.Error() != "not found" {
-		fmt.Println(err.Error())
-		return false
+		return false, err
 	}
 
 	for _, episode := range episodes {
 		if episode.Downloading || episode.Downloaded {
-			return false
+			fmt.Println(episodeid)
+			fmt.Println(episode.Episodeid)
+			return false, fmt.Errorf("Already found %v", episode.ID)
 		}
 	}
 
-	return true
+	return true, nil
 }
 
 // AddDownload adds an episode to a show
@@ -184,7 +184,30 @@ func (s Show) SetDownloaded(title string) error {
 		err = database.Conn.Update(&episode)
 	}
 	return err
+}
 
+// SetDownloadFailed changes the state of an episode to downloaded
+func (s Show) SetDownloadFailed(title string) error {
+
+	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
+	if err != nil {
+		return err
+	}
+
+	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeID), q.Eq("Downloading", true))
+
+	var episodes []episodes.Episode
+	err = query.Find(&episodes)
+
+	for _, episode := range episodes {
+		if !episode.Downloading {
+			continue
+		}
+		fmt.Println("Marking as failed: ", title)
+		episode.Downloaded = false
+		err = database.Conn.Update(&episode)
+	}
+	return err
 }
 
 // AddEpisode adds an episode from the filesystem to a show

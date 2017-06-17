@@ -25,7 +25,7 @@ type Episode struct {
 }
 
 var (
-	episodeRegexp      = regexp.MustCompile(`.*?[s]?([0-9]{1,2})[xe]([0-9]{1,2}).*`)
+	episodeRegexp      = regexp.MustCompile(`.*?[sS]?([0-9]{1,2})[xeXE]([0-9]{1,2}).*`)
 	episodeShortRegexp = regexp.MustCompile(`.*[^2-9]([0-9]{1})([0-3][0-9])[^0-9p].*`)
 	dateRegexp         = regexp.MustCompile(`.*([0-9]{4})\.?\s?(\d\d)\.?\s?(\d\d).*`)
 )
@@ -61,7 +61,7 @@ func New(title, showID, episodeID, magnetlink string, downloaded, downloading bo
 
 // NewEnough checks a episodeid for newenoughiness
 func NewEnough(id string, minimal int64, seasonal bool) bool {
-	if seasonal {
+	if !seasonal {
 		year, err := strconv.ParseInt(id[0:4], 10, 64)
 		if err != nil {
 			return false
@@ -79,7 +79,7 @@ func NewEnough(id string, minimal int64, seasonal bool) bool {
 func ExtractEpisodeID(title string, seasonal bool) (string, error) {
 	var matches []string
 
-	if seasonal {
+	if !seasonal {
 		matches = dateRegexp.FindStringSubmatch(title)
 		if matches != nil && len(matches) == 4 {
 			return strings.Join(matches[1:], "-"), nil
@@ -91,7 +91,7 @@ func ExtractEpisodeID(title string, seasonal bool) (string, error) {
 			if err != nil {
 				return "", errors.New("could not parse season")
 			}
-			episode, err := strconv.ParseInt(matches[1], 10, 64)
+			episode, err := strconv.ParseInt(matches[2], 10, 64)
 			if err != nil {
 				return "", errors.New("could not parse episode")
 			}
@@ -103,7 +103,7 @@ func ExtractEpisodeID(title string, seasonal bool) (string, error) {
 			if err != nil {
 				return "", errors.New("could not parse season")
 			}
-			episode, err := strconv.ParseInt(matches[1], 10, 64)
+			episode, err := strconv.ParseInt(matches[2], 10, 64)
 			if err != nil {
 				return "", errors.New("could not parse episode")
 			}

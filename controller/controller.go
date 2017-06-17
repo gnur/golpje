@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/anacrolix/torrent"
+	"github.com/asdine/storm"
+	"github.com/gnur/golpje/database"
 	"github.com/gnur/golpje/downloader"
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
@@ -32,6 +34,9 @@ type controller struct {
 func Start(config *viper.Viper) error {
 	var con controller
 	con.config = config
+
+	database.Conn, _ = storm.Open(con.config.GetString("database_file"))
+	defer database.Conn.Close()
 	lis, err := net.Listen("tcp", con.config.GetString("port"))
 
 	if err != nil {
@@ -59,74 +64,82 @@ func Start(config *viper.Viper) error {
 func (con *controller) resulthandler() {
 	for res := range con.Searchresults {
 		fmt.Println("--------------")
-		if res.Seeders > 10 && strings.Contains(res.Title, "264") {
-			fmt.Println(res.ShowID, res.Title)
-			show, err := shows.GetFromID(res.ShowID)
-			if err != nil {
-				fmt.Println("continuing")
-				continue
-			}
-			if show.ShouldDownload(res.Title) {
-				fmt.Println("yes: ")
-				fmt.Println(res.Title)
-				downloadID, err := show.AddDownload(res.Title, res.Magnetlink)
-				if err == nil {
-					events.New(fmt.Sprintf("Starting download of %s", res.Title), []string{res.ShowID, downloadID})
-					fmt.Println("starting download")
-					fmt.Println(downloadID)
-					resultChannel := make(chan downloader.Result)
-					downloadPath := fmt.Sprintf("%s/%s", con.config.GetString("download_path"), downloadID)
-					dl := downloader.Download{
-						Magnetlink:    res.Magnetlink,
-						DownloadDir:   downloadPath,
-						ResultChannel: resultChannel,
-					}
-					fmt.Println("sending download to channel")
-					con.DownloadChannel <- dl
-					fmt.Println("waiting for result")
-					downloadResult := <-resultChannel
-					if downloadResult.Completed {
-						fmt.Println("download completed")
-						var largestFile torrent.File
-						var largest int64
-						largest = 0
-						for _, f := range downloadResult.Files {
-							fmt.Println(f.Path())
-							if f.Length() > largest {
-								largest = f.Length()
-								largestFile = f
-							}
-						}
-						fmt.Println("setting as downloaded: ", res.Title)
-						showPath := show.Path(con.config.GetString("shows_path"))
-						targetDir := show.GetSeasonDir(res.Title, showPath)
-						targetName := filepath.Join(targetDir, filepath.Base(largestFile.Path()))
-						sourceName := filepath.Join(downloadPath, largestFile.Path())
-						fmt.Println("printing a lot of paths now..")
-						fmt.Println(showPath)
-						fmt.Println(targetDir)
-						fmt.Println(sourceName)
-						fmt.Println(targetName)
-						err := os.MkdirAll(filepath.Dir(targetName), 0777)
-						if err != nil {
-							fmt.Println("mkdirall error: ", err.Error())
-							continue
-						}
+		if res.Seeders < 10 || !strings.Contains(res.Title, "264") {
+			fmt.Println("too little seeders or not 264")
+			continue
+		}
+		fmt.Println(res.ShowID, res.Title)
+		show, err := shows.GetFromID(res.ShowID)
+		if err != nil {
+			fmt.Println("continuing ", err.Error())
+			continue
+		}
+		shouldDownload, err := show.ShouldDownload(res.Title)
 
-						err = os.Rename(sourceName, targetName)
-						if err != nil {
-							fmt.Println("rename error: ", err.Error())
-							continue
-						}
-						events.New(fmt.Sprintf("Completed download of %s", res.Title), []string{res.ShowID, downloadID})
-						show.SetDownloaded(res.Title)
+		if !shouldDownload {
+			fmt.Println("not downloading..")
+			fmt.Println(err.Error())
+			continue
+		}
+		fmt.Println("yes: ")
+		fmt.Println(res.Title)
+		downloadID, err := show.AddDownload(res.Title, res.Magnetlink)
+		if err != nil {
+			fmt.Println("got an error..")
+			fmt.Println(err.Error())
+			continue
+		}
 
-					} else {
-						fmt.Println("download did not complete: ", downloadResult.Error)
-					}
-				}
+		events.New(fmt.Sprintf("Starting download of %s", res.Title), []string{res.ShowID, downloadID})
+		fmt.Println("starting download")
+		fmt.Println(downloadID)
+		resultChannel := make(chan downloader.Result)
+		downloadPath := fmt.Sprintf("%s/%s", con.config.GetString("download_path"), downloadID)
+		dl := downloader.Download{
+			Magnetlink:    res.Magnetlink,
+			DownloadDir:   downloadPath,
+			ResultChannel: resultChannel,
+		}
+		fmt.Println("sending download to channel")
+		con.DownloadChannel <- dl
+		fmt.Println("waiting for result")
+		downloadResult := <-resultChannel
+		if !downloadResult.Completed {
+			fmt.Println("Download did not complete")
+			fmt.Println(downloadResult.Error)
+			show.SetDownloadFailed(res.Title)
+			continue
+		}
+
+		fmt.Println("download completed")
+		var largestFile torrent.File
+		var largest int64
+		largest = 0
+		for _, f := range downloadResult.Files {
+			fmt.Println(f.Path())
+			if f.Length() > largest {
+				largest = f.Length()
+				largestFile = f
 			}
 		}
+		fmt.Println("setting as downloaded: ", res.Title)
+		showPath := show.Path(con.config.GetString("shows_path"))
+		targetDir := show.GetSeasonDir(res.Title, showPath)
+		targetName := filepath.Join(targetDir, filepath.Base(largestFile.Path()))
+		sourceName := filepath.Join(downloadPath, largestFile.Path())
+		err = os.MkdirAll(filepath.Dir(targetName), 0777)
+		if err != nil {
+			fmt.Println("mkdirall error: ", err.Error())
+			continue
+		}
+
+		err = os.Rename(sourceName, targetName)
+		if err != nil {
+			fmt.Println("rename error: ", err.Error())
+			continue
+		}
+		events.New(fmt.Sprintf("Completed download of %s", res.Title), []string{res.ShowID, downloadID})
+		show.SetDownloaded(res.Title)
 	}
 }
 
@@ -207,18 +220,23 @@ func (con *controller) SyncShow(ctx context.Context, in *pb.SyncShowRequest) (*p
 	}
 	show.DeleteAllEpisodes()
 	showdir := show.Path(con.config.GetString("shows_path"))
-	fmt.Println(showdir)
+	var totalSynced int64
+	totalSynced = 0
 	filepath.Walk(showdir, func(path string, info os.FileInfo, err error) error {
 		if err == nil {
 			if !info.IsDir() {
-				fmt.Println(info.Name())
 				show.AddEpisode(info.Name())
+				totalSynced++
 			}
 		}
 		return nil
 	})
 
-	return &pb.SyncShowResponse{}, nil
+	return &pb.SyncShowResponse{
+		Success:       true,
+		FoundEpisodes: totalSynced,
+		Error:         "",
+	}, nil
 }
 
 func (con *controller) AddEpisode(ctx context.Context, in *pb.ProtoEpisode) (*pb.AddEpisodeResponse, error) {

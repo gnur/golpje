@@ -61,7 +61,7 @@ func downloadMagnetLink(magnetlink, targetDirectory string) (*torrent.Torrent, e
 		completedChan <- true
 	}()
 	go func() {
-		time.Sleep(15 * time.Minute)
+		time.Sleep(20 * time.Minute)
 		timeoutChan <- true
 	}()
 	select {
