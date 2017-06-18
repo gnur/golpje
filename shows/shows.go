@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strconv"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -252,11 +251,10 @@ func (s Show) GetSeasonDir(title, showBasePath string) string {
 	}
 
 	var seasonDir string
-	if s.Seasonal {
+	if !s.Seasonal {
 		seasonDir = episodeID[:7]
 	} else {
-		season, _ := strconv.ParseInt(episodeID[1:3], 10, 64)
-		seasonDir = fmt.Sprintf("season %02d", season)
+		seasonDir = fmt.Sprintf("season %v", episodeID[1:3])
 	}
 
 	return filepath.Join(showBasePath, seasonDir)
