@@ -48,7 +48,7 @@ func Start(config *viper.Viper) error {
 	con.DownloadChannel = make(chan downloader.Download, 40) //buffered channel so it doesn't block and queues new downloads
 	go downloader.Start(con.DownloadChannel)
 	if con.config.GetBool("search_enabled") {
-		go searcher.Start(con.Searchresults)
+		go searcher.Start(con.Searchresults, con.config.GetDuration("search_interval"))
 	}
 	go con.resulthandler()
 	s := grpc.NewServer()
@@ -107,6 +107,7 @@ func (con *controller) resulthandler() {
 		if !downloadResult.Completed {
 			fmt.Println("Download did not complete")
 			fmt.Println(downloadResult.Error)
+			events.New(fmt.Sprintf("Download of %s failed; %s", res.Title, downloadResult.Error), []string{res.ShowID, downloadID})
 			show.SetDownloadFailed(res.Title)
 			continue
 		}

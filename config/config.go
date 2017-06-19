@@ -26,4 +26,5 @@ func loadDefaults(v *viper.Viper) {
 	v.SetDefault("port", ":3222")
 	v.SetDefault("cli_address", "localhost:3222")
 	v.SetDefault("search_enabled", true)
+	v.SetDefault("search_interval", "15m")
 }

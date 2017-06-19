@@ -19,7 +19,7 @@ type Searchresult struct {
 }
 
 // Start starts the searcher that periodically searches for shows
-func Start(results chan Searchresult) {
+func Start(results chan Searchresult, searchInterval time.Duration) {
 
 	for {
 		shows, err := shows.All()
@@ -39,6 +39,6 @@ func Start(results chan Searchresult) {
 				}
 			}
 		}
-		time.Sleep(5 * time.Minute)
+		time.Sleep(searchInterval)
 	}
 }
