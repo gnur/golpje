@@ -17,6 +17,15 @@ if [[ $? -ne 0 ]]; then
    exit 0
 fi
 
+if [[ $1 = "release" ]]; then
+    git fetch --tags
+    GIT_TAG="$(git describe --always --tags $(git rev-list --tags --max-count=1))"
+    for arch in amd64 x86 arm; do
+        go build -o dist/golpje-linux-${arch}-${GIT_TAG} *.go
+    done
+    exit 0
+fi
+
 log "starting"
 echo '---------------------------------'
 echo

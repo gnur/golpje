@@ -1,0 +1,24 @@
+sudo: false
+language: go
+
+go:
+- 1.8
+
+before_script:
+  - go get
+
+# before we deploy, we go build for all operating systems we would like to support
+before_deploy:
+  - bin/build release
+
+# this tells travis-ci to create a github release and deploy artifacts to
+# github _only_ when there is a tag associated with a commit. That is what the tags: true means.
+# You can setup this section really easily by doing `$ travis setup releases`
+deploy:
+  provider: releases
+  api_key: $GITHUB_TOKEN
+  file:
+    - "dist/*"
+  skip_cleanup: true
+  on:
+    tags: true

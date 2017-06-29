@@ -1,0 +1,10 @@
+#!/bin/bash
+
+REVS=$(git log --oneline | wc -l)
+
+
+echo -n "Release message: "
+read msg
+
+git tag -a "Release-${REVS}" -m "${msg}"
+git push --tags origin master
