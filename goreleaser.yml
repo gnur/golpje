@@ -26,8 +26,8 @@ archive:
       format: zip
   replacements:
     amd64: 64-bit
-    darwin: macOS
-    linux: Tux
+    386: 32-bit
+    darwin: mac
 
 release:
   github:
