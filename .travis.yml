@@ -10,11 +10,5 @@ script:
 before_deploy:
   - bin/build release
 
-deploy:
-  provider: releases
-  api_key: $GITHUB_TOKEN
-  file:
-    - "dist/*"
-  skip_cleanup: true
-  on:
-    tags: true
+after_success:
+  - test -n "$TRAVIS_TAG" && curl -sL https://git.io/goreleaser | bash
