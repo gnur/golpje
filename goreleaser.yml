@@ -1,0 +1,36 @@
+# goreleaser.yml
+# Build customization
+build:
+  main: main.go
+  binary: golpje
+  goos:
+    - windows
+    - darwin
+    - linux
+  goarch:
+    - amd64
+    - 386
+    - arm
+
+ignore:
+  - goos: darwin
+    goarch: arm
+  - goos: darwin
+    goarch: 386
+
+# Archive customization
+archive:
+  format: tar.gz
+  format_overrides:
+    - goos: windows
+      format: zip
+  replacements:
+    amd64: 64-bit
+    darwin: macOS
+    linux: Tux
+
+release:
+  github:
+    owner: gnur
+    repo: golpje
+  draft: true
