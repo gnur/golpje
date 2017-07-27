@@ -26,5 +26,4 @@ archive:
 release:
   github:
     owner: gnur
-    repo: golpje
   draft: false
