@@ -12,12 +12,6 @@ build:
     - 386
     - arm
 
-ignore:
-  - goos: darwin
-    goarch: arm
-  - goos: darwin
-    goarch: 386
-
 # Archive customization
 archive:
   format: tar.gz
@@ -33,4 +27,4 @@ release:
   github:
     owner: gnur
     repo: golpje
-  draft: true
+  draft: false
