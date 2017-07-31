@@ -2,7 +2,9 @@ package controller
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +21,7 @@ import (
 	pb "github.com/gnur/golpje/golpje"
 	"github.com/gnur/golpje/searcher"
 	"github.com/gnur/golpje/shows"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 )
@@ -38,6 +41,11 @@ func Start(config *viper.Viper) error {
 	database.Conn, _ = storm.Open(con.config.GetString("database_file"))
 	defer database.Conn.Close()
 	lis, err := net.Listen("tcp", con.config.GetString("port"))
+
+	go func() {
+		http.Handle(con.config.GetString("metrics_path"), promhttp.Handler())
+		log.Fatal(http.ListenAndServe(con.config.GetString("metrics_port"), nil))
+	}()
 
 	if err != nil {
 		fmt.Println("IM NOTLISTENING!")
@@ -104,6 +112,7 @@ func (con *controller) resulthandler() {
 		con.DownloadChannel <- dl
 		fmt.Println("waiting for result")
 		downloadResult := <-resultChannel
+		close(resultChannel)
 		if !downloadResult.Completed {
 			fmt.Println("Download did not complete")
 			fmt.Println(downloadResult.Error)
