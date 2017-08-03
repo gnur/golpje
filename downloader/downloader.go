@@ -38,6 +38,7 @@ func Start(DownloadChannel chan Download) {
 				Completed: true,
 				Error:     nil,
 			}
+			result.Drop()
 		}
 	}
 }
