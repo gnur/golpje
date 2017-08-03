@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/asdine/storm"
-	"github.com/gnur/golpje/database"
 	"github.com/google/uuid"
 )
 
@@ -31,10 +30,10 @@ var (
 )
 
 // All returns all events
-func All() ([]Episode, error) {
+func All(db *storm.DB) ([]Episode, error) {
 	var episodes []Episode
 
-	err := database.Conn.AllByIndex("Timestamp", &episodes, storm.Reverse())
+	err := db.AllByIndex("Timestamp", &episodes, storm.Reverse())
 	if err != nil {
 		fmt.Println(err.Error())
 	}
@@ -42,7 +41,7 @@ func All() ([]Episode, error) {
 }
 
 // New adds an episode and returns if it was successful
-func New(title, showID, episodeID, magnetlink string, downloaded, downloading bool) (string, error) {
+func New(db *storm.DB, title, showID, episodeID, magnetlink string, downloaded, downloading bool) (string, error) {
 
 	u1 := uuid.New()
 
@@ -55,12 +54,12 @@ func New(title, showID, episodeID, magnetlink string, downloaded, downloading bo
 		Downloaded:  downloaded,
 		Downloading: downloading,
 	}
-	err := database.Conn.Save(&e)
+	err := db.Save(&e)
 	return e.ID, err
 }
 
 // NewEnough checks a episodeid for newenoughiness
-func NewEnough(id string, minimal int64, seasonal bool) bool {
+func NewEnough(db *storm.DB, id string, minimal int64, seasonal bool) bool {
 	if !seasonal {
 		year, err := strconv.ParseInt(id[0:4], 10, 64)
 		if err != nil {

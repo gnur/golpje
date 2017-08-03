@@ -2,7 +2,6 @@ package command
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -38,28 +37,7 @@ func (c *EventCommand) Run(args []string) int {
 	if len(args) == 0 {
 		args = []string{"list", "-since", "24h"}
 	}
-	if args[0] == "add" {
-		addCommand := flag.NewFlagSet("add", flag.ExitOnError)
-
-		eventText := addCommand.String("text", "dummy event", "text of the event to add")
-		relatedTags := addCommand.String("related", "", "comma separated list of related arns")
-
-		addCommand.Parse(args[1:])
-
-		var related []string
-
-		if *relatedTags != "" {
-			related = strings.Split(*relatedTags, ",")
-		}
-
-		id, err := events.New(*eventText, related)
-		if err != nil {
-			fmt.Println(err.Error())
-		} else {
-			fmt.Println("added event with id: ", id)
-		}
-
-	} else if args[0] == "list" {
+	if args[0] == "list" {
 		listCommand := flag.NewFlagSet("list", flag.ExitOnError)
 
 		returnAll := listCommand.Bool("all", false, "Return all events")

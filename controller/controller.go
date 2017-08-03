@@ -15,7 +15,6 @@ import (
 
 	"github.com/anacrolix/torrent"
 	"github.com/asdine/storm"
-	"github.com/gnur/golpje/database"
 	"github.com/gnur/golpje/downloader"
 	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
@@ -31,15 +30,21 @@ type controller struct {
 	Searchresults   chan searcher.Searchresult
 	DownloadChannel chan downloader.Download
 	config          *viper.Viper
+	db              *storm.DB
 }
 
 // Start commences the controller
 func Start(config *viper.Viper) error {
 	var con controller
+	var err error
 	con.config = config
 
-	database.Conn, _ = storm.Open(con.config.GetString("database_file"))
-	defer database.Conn.Close()
+	con.db, err = storm.Open(con.config.GetString("database_file"))
+	defer con.db.Close()
+	if err != nil {
+		fmt.Println("could not open database file")
+		return err
+	}
 	lis, err := net.Listen("tcp", con.config.GetString("port"))
 
 	go func() {
@@ -56,7 +61,7 @@ func Start(config *viper.Viper) error {
 	con.DownloadChannel = make(chan downloader.Download, 40) //buffered channel so it doesn't block and queues new downloads
 	go downloader.Start(con.DownloadChannel)
 	if con.config.GetBool("search_enabled") {
-		go searcher.Start(con.Searchresults, con.config.GetDuration("search_interval"))
+		go searcher.Start(con.db, con.Searchresults, con.config.GetDuration("search_interval"))
 	}
 	go con.resulthandler()
 	s := grpc.NewServer()
@@ -77,12 +82,12 @@ func (con *controller) resulthandler() {
 			continue
 		}
 		fmt.Println(res.ShowID, res.Title)
-		show, err := shows.GetFromID(res.ShowID)
+		show, err := shows.GetFromID(con.db, res.ShowID)
 		if err != nil {
 			fmt.Println("continuing ", err.Error())
 			continue
 		}
-		shouldDownload, err := show.ShouldDownload(res.Title)
+		shouldDownload, err := show.ShouldDownload(con.db, res.Title)
 
 		if !shouldDownload {
 			fmt.Println("not downloading..")
@@ -91,14 +96,14 @@ func (con *controller) resulthandler() {
 		}
 		fmt.Println("yes: ")
 		fmt.Println(res.Title)
-		downloadID, err := show.AddDownload(res.Title, res.Magnetlink)
+		downloadID, err := show.AddDownload(con.db, res.Title, res.Magnetlink)
 		if err != nil {
 			fmt.Println("got an error..")
 			fmt.Println(err.Error())
 			continue
 		}
 
-		events.New(fmt.Sprintf("Starting download of %s", res.Title), []string{res.ShowID, downloadID})
+		events.New(con.db, fmt.Sprintf("Starting download of %s", res.Title), []string{res.ShowID, downloadID})
 		fmt.Println("starting download")
 		fmt.Println(downloadID)
 		resultChannel := make(chan downloader.Result)
@@ -116,8 +121,8 @@ func (con *controller) resulthandler() {
 		if !downloadResult.Completed {
 			fmt.Println("Download did not complete")
 			fmt.Println(downloadResult.Error)
-			events.New(fmt.Sprintf("Download of %s failed; %s", res.Title, downloadResult.Error), []string{res.ShowID, downloadID})
-			show.SetDownloadFailed(res.Title)
+			events.New(con.db, fmt.Sprintf("Download of %s failed; %s", res.Title, downloadResult.Error), []string{res.ShowID, downloadID})
+			show.SetDownloadFailed(con.db, res.Title)
 			continue
 		}
 
@@ -148,8 +153,8 @@ func (con *controller) resulthandler() {
 			fmt.Println("rename error: ", err.Error())
 			continue
 		}
-		events.New(fmt.Sprintf("Completed download of %s", res.Title), []string{res.ShowID, downloadID})
-		show.SetDownloaded(res.Title)
+		events.New(con.db, fmt.Sprintf("Completed download of %s", res.Title), []string{res.ShowID, downloadID})
+		show.SetDownloaded(con.db, res.Title)
 	}
 }
 
@@ -157,9 +162,9 @@ func (con *controller) GetEvents(ctx context.Context, in *pb.EventRequest) (*pb.
 	var ev []events.Event
 	var err error
 	if in.All {
-		ev, err = events.All()
+		ev, err = events.All(con.db)
 	} else {
-		ev, err = events.After(time.Unix(0, in.Since))
+		ev, err = events.After(con.db, time.Unix(0, in.Since))
 	}
 	if err != nil {
 		fmt.Println(err.Error())
@@ -177,7 +182,7 @@ func (con *controller) GetEvents(ctx context.Context, in *pb.EventRequest) (*pb.
 
 func (con *controller) GetShows(ctx context.Context, in *pb.ShowRequest) (*pb.ProtoShows, error) {
 	var resp pb.ProtoShows
-	allShows, _ := shows.All()
+	allShows, _ := shows.All(con.db)
 	for _, show := range allShows {
 		fmt.Println(show.ID, show.Active)
 		if (!in.Onlyactive || (in.Onlyactive && show.Active)) && (in.Name == "" || in.Name == show.Name) {
@@ -190,11 +195,11 @@ func (con *controller) GetShows(ctx context.Context, in *pb.ShowRequest) (*pb.Pr
 
 func (con *controller) AddShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddShowResponse, error) {
 	var resp pb.AddShowResponse
-	uuid, err := shows.New(in.Name, in.Regexp, in.Seasonal, in.Active, in.Minimal)
+	uuid, err := shows.New(con.db, in.Name, in.Regexp, in.Seasonal, in.Active, in.Minimal)
 	if err != nil {
 		resp.Error = err.Error()
 	} else {
-		s, _ := shows.GetFromID(uuid)
+		s, _ := shows.GetFromID(con.db, uuid)
 		resp.Show = s.ToProto()
 	}
 
@@ -203,12 +208,12 @@ func (con *controller) AddShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddSh
 
 func (con *controller) DelShow(ctx context.Context, in *pb.ProtoShow) (*pb.AddShowResponse, error) {
 	var resp pb.AddShowResponse
-	show, err := shows.GetFromID(in.ID)
+	show, err := shows.GetFromID(con.db, in.ID)
 	if err != nil {
 		resp.Error = err.Error()
 	} else {
 		resp.Show = show.ToProto()
-		show.Delete()
+		show.Delete(con.db)
 	}
 
 	return &resp, nil
@@ -222,20 +227,20 @@ func (con *controller) SyncShow(ctx context.Context, in *pb.SyncShowRequest) (*p
 	//get show
 	//remove all episodes
 	//loop over all files and add episodes as downloaded
-	show, err := shows.GetFromID(in.ShowID)
+	show, err := shows.GetFromID(con.db, in.ShowID)
 	if err != nil {
 		return &pb.SyncShowResponse{
 			Error: err.Error(),
 		}, nil
 	}
-	show.DeleteAllEpisodes()
+	show.DeleteAllEpisodes(con.db)
 	showdir := show.Path(con.config.GetString("shows_path"))
 	var totalSynced int64
 	totalSynced = 0
 	filepath.Walk(showdir, func(path string, info os.FileInfo, err error) error {
 		if err == nil {
 			if !info.IsDir() {
-				show.AddEpisode(info.Name())
+				show.AddEpisode(con.db, info.Name())
 				totalSynced++
 			}
 		}

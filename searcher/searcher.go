@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/asdine/storm"
 	"github.com/gnur/go-piratebay"
 	"github.com/gnur/golpje/events"
 	"github.com/gnur/golpje/shows"
@@ -19,15 +20,15 @@ type Searchresult struct {
 }
 
 // Start starts the searcher that periodically searches for shows
-func Start(results chan Searchresult, searchInterval time.Duration) {
+func Start(db *storm.DB, results chan Searchresult, searchInterval time.Duration) {
 
 	for {
-		shows, err := shows.All()
+		shows, err := shows.All(db)
 		if err != nil {
 			continue
 		}
 		for _, show := range shows {
-			events.New(fmt.Sprintf("Searching for new episodes of %s", show.Name), []string{show.ID})
+			events.New(db, fmt.Sprintf("Searching for new episodes of %s", show.Name), []string{show.ID})
 			torrents, _ := piratebay.Search(show.Name)
 			for _, torrent := range torrents {
 				results <- Searchresult{

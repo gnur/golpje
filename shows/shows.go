@@ -7,7 +7,6 @@ import (
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
-	"github.com/gnur/golpje/database"
 	"github.com/gnur/golpje/episodes"
 	"github.com/gnur/golpje/golpje"
 	"github.com/google/uuid"
@@ -24,10 +23,10 @@ type Show struct {
 }
 
 // New creates a new show
-func New(name, regexp string, seasonal, active bool, minimal int64) (string, error) {
+func New(db *storm.DB, name, regexp string, seasonal, active bool, minimal int64) (string, error) {
 	var match Show
 
-	err := database.Conn.One("Name", name, &match)
+	err := db.One("Name", name, &match)
 	if err != storm.ErrNotFound {
 		return match.ID, errors.New("Show with this name already exists")
 	}
@@ -42,23 +41,23 @@ func New(name, regexp string, seasonal, active bool, minimal int64) (string, err
 		Active:   active,
 		Minimal:  minimal,
 	}
-	err = database.Conn.Save(&s)
+	err = db.Save(&s)
 	return s.ID, nil
 }
 
 // All returns all shows
-func All() ([]Show, error) {
+func All(db *storm.DB) ([]Show, error) {
 	var matches []Show
-	err := database.Conn.All(&matches)
+	err := db.All(&matches)
 	return matches, err
 }
 
 // GetFromID retrieve a show from an UUID
-func GetFromID(uuid string) (Show, error) {
+func GetFromID(db *storm.DB, uuid string) (Show, error) {
 
 	var match Show
 
-	err := database.Conn.One("ID", uuid, &match)
+	err := db.One("ID", uuid, &match)
 	if err != nil {
 		return match, err
 	}
@@ -66,10 +65,10 @@ func GetFromID(uuid string) (Show, error) {
 }
 
 // GetFromName retrieve a show from an UUID
-func GetFromName(name string) (Show, error) {
+func GetFromName(db *storm.DB, name string) (Show, error) {
 	var match Show
 
-	err := database.Conn.One("name", name, &match)
+	err := db.One("name", name, &match)
 	if err != nil {
 		return match, err
 	}
@@ -77,12 +76,12 @@ func GetFromName(name string) (Show, error) {
 }
 
 // Delete removes a show from the database
-func (s Show) Delete() error {
-	return database.Conn.DeleteStruct(&s)
+func (s Show) Delete(db *storm.DB) error {
+	return db.DeleteStruct(&s)
 }
 
 // Print provides a convenient way of pretty printing a show
-func (s Show) Print() {
+func (s Show) Print(db *storm.DB) {
 	fmt.Println("--------------")
 	fmt.Println(s.ID, s.Name, s.Active)
 }
@@ -122,17 +121,17 @@ func (s Show) ToProto() *golpje.ProtoShow {
 }
 
 // ShouldDownload returns if the episode has not been downloaded yet and still should
-func (s Show) ShouldDownload(title string) (bool, error) {
+func (s Show) ShouldDownload(db *storm.DB, title string) (bool, error) {
 
 	episodeid, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
 		return false, err
 	}
-	if !episodes.NewEnough(episodeid, s.Minimal, s.Seasonal) {
+	if !episodes.NewEnough(db, episodeid, s.Minimal, s.Seasonal) {
 		return false, fmt.Errorf("id: %s, minimal: %v, seasonal: %t", episodeid, s.Minimal, s.Seasonal)
 	}
 
-	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeid))
+	query := db.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeid))
 
 	var episodes []episodes.Episode
 	err = query.Find(&episodes)
@@ -153,25 +152,25 @@ func (s Show) ShouldDownload(title string) (bool, error) {
 }
 
 // AddDownload adds an episode to a show
-func (s Show) AddDownload(title, magnetlink string) (string, error) {
+func (s Show) AddDownload(db *storm.DB, title, magnetlink string) (string, error) {
 
 	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
 		return "", err
 	}
 
-	return episodes.New(title, s.ID, episodeID, magnetlink, false, true)
+	return episodes.New(db, title, s.ID, episodeID, magnetlink, false, true)
 }
 
 // SetDownloaded changes the state of an episode to downloaded
-func (s Show) SetDownloaded(title string) error {
+func (s Show) SetDownloaded(db *storm.DB, title string) error {
 
 	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
 		return err
 	}
 
-	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeID), q.Eq("Downloading", true))
+	query := db.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeID), q.Eq("Downloading", true))
 
 	var episodes []episodes.Episode
 	err = query.Find(&episodes)
@@ -180,20 +179,20 @@ func (s Show) SetDownloaded(title string) error {
 		fmt.Println("Marking as done: ", title)
 		episode.Downloaded = true
 		episode.Downloading = false
-		err = database.Conn.Update(&episode)
+		err = db.Update(&episode)
 	}
 	return err
 }
 
 // SetDownloadFailed changes the state of an episode to downloaded
-func (s Show) SetDownloadFailed(title string) error {
+func (s Show) SetDownloadFailed(db *storm.DB, title string) error {
 
 	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
 		return err
 	}
 
-	query := database.Conn.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeID), q.Eq("Downloading", true))
+	query := db.Select(q.Eq("Showid", s.ID), q.Eq("Episodeid", episodeID), q.Eq("Downloading", true))
 
 	var episodes []episodes.Episode
 	err = query.Find(&episodes)
@@ -204,26 +203,26 @@ func (s Show) SetDownloadFailed(title string) error {
 		}
 		fmt.Println("Marking as failed: ", title)
 		episode.Downloaded = false
-		err = database.Conn.Update(&episode)
+		err = db.Update(&episode)
 	}
 	return err
 }
 
 // AddEpisode adds an episode from the filesystem to a show
-func (s Show) AddEpisode(title string) (string, error) {
+func (s Show) AddEpisode(db *storm.DB, title string) (string, error) {
 
 	episodeID, err := episodes.ExtractEpisodeID(title, s.Seasonal)
 	if err != nil {
 		return "", err
 	}
 
-	return episodes.New(title, s.ID, episodeID, "fs", true, false)
+	return episodes.New(db, title, s.ID, episodeID, "fs", true, false)
 }
 
 // DeleteAllEpisodes removes all episodes from the datastore
-func (s Show) DeleteAllEpisodes() error {
+func (s Show) DeleteAllEpisodes(db *storm.DB) error {
 
-	query := database.Conn.Select(q.Eq("Showid", s.ID))
+	query := db.Select(q.Eq("Showid", s.ID))
 	var episodes []episodes.Episode
 	err := query.Find(&episodes)
 	if err != nil {
@@ -232,7 +231,7 @@ func (s Show) DeleteAllEpisodes() error {
 	err = nil
 	for _, episode := range episodes {
 		fmt.Println("Removing ", episode.Title)
-		err = database.Conn.DeleteStruct(&episode)
+		err = db.DeleteStruct(&episode)
 	}
 	return err
 }

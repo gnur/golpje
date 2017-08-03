@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/asdine/storm"
-	"github.com/gnur/golpje/database"
 	"github.com/gnur/golpje/golpje"
 	"github.com/google/uuid"
 )
@@ -20,10 +19,10 @@ type Event struct {
 }
 
 // All returns all events
-func All() ([]Event, error) {
+func All(db *storm.DB) ([]Event, error) {
 	var events []Event
 
-	err := database.Conn.AllByIndex("Timestamp", &events, storm.Reverse())
+	err := db.AllByIndex("Timestamp", &events, storm.Reverse())
 	if err != nil {
 		fmt.Println(err.Error())
 	}
@@ -31,9 +30,9 @@ func All() ([]Event, error) {
 }
 
 // After returns all events after the provided timestamp
-func After(then time.Time) ([]Event, error) {
+func After(db *storm.DB, then time.Time) ([]Event, error) {
 	var events []Event
-	err := database.Conn.Range("Timestamp", then.UnixNano(), time.Now().UnixNano(), &events)
+	err := db.Range("Timestamp", then.UnixNano(), time.Now().UnixNano(), &events)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +48,7 @@ func After(then time.Time) ([]Event, error) {
 }
 
 // New saves a new event to the database
-func New(text string, related []string) (string, error) {
+func New(db *storm.DB, text string, related []string) (string, error) {
 	u1 := uuid.New()
 
 	e := Event{
@@ -58,7 +57,7 @@ func New(text string, related []string) (string, error) {
 		Related:   related,
 		Data:      text,
 	}
-	err := database.Conn.Save(&e)
+	err := db.Save(&e)
 	if err != nil {
 		fmt.Println(err.Error())
 		return "", err
