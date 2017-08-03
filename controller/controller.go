@@ -47,10 +47,12 @@ func Start(config *viper.Viper) error {
 	}
 	lis, err := net.Listen("tcp", con.config.GetString("port"))
 
-	go func() {
-		http.Handle(con.config.GetString("metrics_path"), promhttp.Handler())
-		log.Fatal(http.ListenAndServe(con.config.GetString("metrics_port"), nil))
-	}()
+	if con.config.GetBool("metrics_enabled") {
+		go func() {
+			http.Handle(con.config.GetString("metrics_path"), promhttp.Handler())
+			log.Fatal(http.ListenAndServe(con.config.GetString("metrics_port"), nil))
+		}()
+	}
 
 	if err != nil {
 		fmt.Println("IM NOTLISTENING!")

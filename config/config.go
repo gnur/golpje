@@ -24,6 +24,7 @@ func loadDefaults(v *viper.Viper) {
 	v.SetDefault("download_path", "/tmp/golpje/")
 	v.SetDefault("database_file", "golpje.db")
 	v.SetDefault("port", ":3222")
+	v.SetDefault("metrics_enabled", true)
 	v.SetDefault("metrics_port", ":8080")
 	v.SetDefault("metrics_path", "/metrics")
 	v.SetDefault("cli_address", "localhost:3222")
