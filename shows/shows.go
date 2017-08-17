@@ -26,6 +26,10 @@ type Show struct {
 func New(db *storm.DB, name, regexp string, seasonal, active bool, minimal int64) (string, error) {
 	var match Show
 
+	if name == "" || regexp == "" {
+		return "", errors.New("name and regexp cannot be empty")
+	}
+
 	err := db.One("Name", name, &match)
 	if err != storm.ErrNotFound {
 		return match.ID, errors.New("Show with this name already exists")
@@ -68,7 +72,7 @@ func GetFromID(db *storm.DB, uuid string) (Show, error) {
 func GetFromName(db *storm.DB, name string) (Show, error) {
 	var match Show
 
-	err := db.One("name", name, &match)
+	err := db.One("Name", name, &match)
 	if err != nil {
 		return match, err
 	}
