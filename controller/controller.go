@@ -20,6 +20,7 @@ import (
 	pb "github.com/gnur/golpje/golpje"
 	"github.com/gnur/golpje/searcher"
 	"github.com/gnur/golpje/shows"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
@@ -63,7 +64,38 @@ func Start(config *viper.Viper) error {
 	con.DownloadChannel = make(chan downloader.Download, 40) //buffered channel so it doesn't block and queues new downloads
 	go downloader.Start(con.DownloadChannel)
 	if con.config.GetBool("search_enabled") {
-		go searcher.Start(con.db, con.Searchresults, con.config.GetDuration("search_interval"))
+		var sm searcher.Searchmetrics
+		if con.config.GetBool("metrics_enabled") {
+			sm = searcher.Searchmetrics{
+				Enabled: true,
+				Searches: prometheus.NewCounter(
+					prometheus.CounterOpts{
+						Name: "golpje_searches",
+						Help: "total number of searches",
+					},
+				),
+				FailedSearches: prometheus.NewCounter(
+					prometheus.CounterOpts{
+						Name: "golpje_failed_searches",
+						Help: "total number of searches that failed",
+					},
+				),
+				SearchResults: prometheus.NewCounter(
+					prometheus.CounterOpts{
+						Name: "golpje_search_results",
+						Help: "total number of results that have been found",
+					},
+				),
+			}
+			prometheus.MustRegister(sm.Searches)
+			prometheus.MustRegister(sm.FailedSearches)
+			prometheus.MustRegister(sm.SearchResults)
+		} else {
+			sm = searcher.Searchmetrics{
+				Enabled: false,
+			}
+		}
+		go searcher.Start(con.db, con.config.GetString("piratebay_url"), con.Searchresults, con.config.GetDuration("search_interval"), sm)
 	}
 	go con.resulthandler()
 	s := grpc.NewServer()

@@ -247,6 +247,9 @@ func TestGetFromName(t *testing.T) {
 }
 
 func TestShow_Delete(t *testing.T) {
+	db := createEmptyDatabase()
+	defer db.close()
+	uuid, _ := New(db.db, "daily show", "daily.*show", true, true, 1)
 	type fields struct {
 		ID       string
 		Name     string
@@ -264,7 +267,24 @@ func TestShow_Delete(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-	// TODO: Add test cases.
+		{name: "delete valid show",
+			args: args{
+				db: db.db,
+			},
+			fields: fields{
+				ID: uuid,
+			},
+			wantErr: false,
+		},
+		{name: "delete invalid show",
+			args: args{
+				db: db.db,
+			},
+			fields: fields{
+				ID: "",
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		s := Show{
