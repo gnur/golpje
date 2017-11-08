@@ -75,7 +75,6 @@ func (fs *fileClientImpl) OpenTorrent(info *metainfo.Info, infoHash metainfo.Has
 	}, nil
 }
 
-// File-based torrent storage, not yet bound to a Torrent.
 type fileTorrentImpl struct {
 	dir        string
 	info       *metainfo.Info
@@ -87,7 +86,7 @@ func (fts *fileTorrentImpl) Piece(p metainfo.Piece) PieceImpl {
 	// Create a view onto the file-based torrent storage.
 	_io := fileTorrentImplIO{fts}
 	// Return the appropriate segments of this.
-	return &fileStoragePiece{
+	return &filePieceImpl{
 		fts,
 		p,
 		missinggo.NewSectionWriter(_io, p.Offset(), p.Length()),
@@ -200,6 +199,7 @@ func (fst fileTorrentImplIO) WriteAt(p []byte, off int64) (n int, err error) {
 			return
 		}
 		n1, err = f.WriteAt(p[:n1], off)
+		// TODO: On some systems, write errors can be delayed until the Close.
 		f.Close()
 		if err != nil {
 			return

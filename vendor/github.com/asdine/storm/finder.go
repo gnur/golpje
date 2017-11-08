@@ -1,6 +1,7 @@
 package storm
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/asdine/storm/index"
@@ -28,6 +29,9 @@ type Finder interface {
 
 	// Range returns one or more records by the specified index within the specified range
 	Range(fieldName string, min, max, to interface{}, options ...func(*index.Options)) error
+
+	// Prefix returns one or more records whose given field starts with the specified prefix.
+	Prefix(fieldName string, prefix string, to interface{}, options ...func(*index.Options)) error
 
 	// Count counts all the records of a bucket
 	Count(data interface{}) (int, error)
@@ -58,6 +62,7 @@ func (n *node) One(fieldName string, value interface{}, to interface{}) error {
 	field, ok := cfg.Fields[fieldName]
 	if !ok || (!field.IsID && field.Index == "") {
 		query := newQuery(n, q.StrictEq(fieldName, value))
+		query.Limit(1)
 
 		if n.tx != nil {
 			err = query.query(n.tx, sink)
@@ -141,9 +146,8 @@ func (n *node) Find(fieldName string, value interface{}, to interface{}, options
 
 	field, ok := cfg.Fields[fieldName]
 	if !ok || (!field.IsID && (field.Index == "" || value == nil)) {
-		sink.limit = opts.Limit
-		sink.skip = opts.Skip
 		query := newQuery(n, q.Eq(fieldName, value))
+		query.Skip(opts.Skip).Limit(opts.Limit)
 
 		if opts.Reverse {
 			query.Reverse()
@@ -175,9 +179,6 @@ func (n *node) find(tx *bolt.Tx, bucketName, fieldName string, cfg *structConfig
 	if bucket == nil {
 		return ErrNotFound
 	}
-
-	sorter := newSorter(n)
-
 	idx, err := getIndex(bucket, cfg.Fields[fieldName].Index, fieldName)
 	if err != nil {
 		return err
@@ -193,19 +194,19 @@ func (n *node) find(tx *bolt.Tx, bucketName, fieldName string, cfg *structConfig
 
 	sink.results = reflect.MakeSlice(reflect.Indirect(sink.ref).Type(), len(list), len(list))
 
+	sorter := newSorter(n, sink)
 	for i := range list {
 		raw := bucket.Get(list[i])
 		if raw == nil {
 			return ErrNotFound
 		}
 
-		_, err = sorter.filter(sink, nil, bucket, list[i], raw)
-		if err != nil {
+		if _, err := sorter.filter(nil, bucket, list[i], raw); err != nil {
 			return err
 		}
 	}
 
-	return sink.flush()
+	return sorter.flush()
 }
 
 // AllByIndex gets all the records of a bucket that are indexed in the specified index
@@ -340,9 +341,8 @@ func (n *node) Range(fieldName string, min, max, to interface{}, options ...func
 
 	field, ok := cfg.Fields[fieldName]
 	if !ok || (!field.IsID && field.Index == "") {
-		sink.limit = opts.Limit
-		sink.skip = opts.Skip
 		query := newQuery(n, q.And(q.Gte(fieldName, min), q.Lte(fieldName, max)))
+		query.Skip(opts.Skip).Limit(opts.Limit)
 
 		if opts.Reverse {
 			query.Reverse()
@@ -381,8 +381,6 @@ func (n *node) rnge(tx *bolt.Tx, bucketName, fieldName string, cfg *structConfig
 		return nil
 	}
 
-	sorter := newSorter(n)
-
 	idx, err := getIndex(bucket, cfg.Fields[fieldName].Index, fieldName)
 	if err != nil {
 		return err
@@ -394,20 +392,105 @@ func (n *node) rnge(tx *bolt.Tx, bucketName, fieldName string, cfg *structConfig
 	}
 
 	sink.results = reflect.MakeSlice(reflect.Indirect(sink.ref).Type(), len(list), len(list))
-
+	sorter := newSorter(n, sink)
 	for i := range list {
 		raw := bucket.Get(list[i])
 		if raw == nil {
 			return ErrNotFound
 		}
 
-		_, err = sorter.filter(sink, nil, bucket, list[i], raw)
-		if err != nil {
+		if _, err := sorter.filter(nil, bucket, list[i], raw); err != nil {
 			return err
 		}
 	}
 
-	return sink.flush()
+	return sorter.flush()
+}
+
+// Prefix returns one or more records whose given field starts with the specified prefix.
+func (n *node) Prefix(fieldName string, prefix string, to interface{}, options ...func(*index.Options)) error {
+	sink, err := newListSink(n, to)
+	if err != nil {
+		return err
+	}
+
+	bucketName := sink.bucketName()
+	if bucketName == "" {
+		return ErrNoName
+	}
+
+	ref := reflect.Indirect(reflect.New(sink.elemType))
+	cfg, err := extractSingleField(&ref, fieldName)
+	if err != nil {
+		return err
+	}
+
+	opts := index.NewOptions()
+	for _, fn := range options {
+		fn(opts)
+	}
+
+	field, ok := cfg.Fields[fieldName]
+	if !ok || (!field.IsID && field.Index == "") {
+		query := newQuery(n, q.Re(fieldName, fmt.Sprintf("^%s", prefix)))
+		query.Skip(opts.Skip).Limit(opts.Limit)
+
+		if opts.Reverse {
+			query.Reverse()
+		}
+
+		err = n.readTx(func(tx *bolt.Tx) error {
+			return query.query(tx, sink)
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return sink.flush()
+	}
+
+	prfx, err := toBytes(prefix, n.s.codec)
+	if err != nil {
+		return err
+	}
+
+	return n.readTx(func(tx *bolt.Tx) error {
+		return n.prefix(tx, bucketName, fieldName, cfg, sink, prfx, opts)
+	})
+}
+
+func (n *node) prefix(tx *bolt.Tx, bucketName, fieldName string, cfg *structConfig, sink *listSink, prefix []byte, opts *index.Options) error {
+	bucket := n.GetBucket(tx, bucketName)
+	if bucket == nil {
+		reflect.Indirect(sink.ref).SetLen(0)
+		return nil
+	}
+
+	idx, err := getIndex(bucket, cfg.Fields[fieldName].Index, fieldName)
+	if err != nil {
+		return err
+	}
+
+	list, err := idx.Prefix(prefix, opts)
+	if err != nil {
+		return err
+	}
+
+	sink.results = reflect.MakeSlice(reflect.Indirect(sink.ref).Type(), len(list), len(list))
+	sorter := newSorter(n, sink)
+	for i := range list {
+		raw := bucket.Get(list[i])
+		if raw == nil {
+			return ErrNotFound
+		}
+
+		if _, err := sorter.filter(nil, bucket, list[i], raw); err != nil {
+			return err
+		}
+	}
+
+	return sorter.flush()
 }
 
 // Count counts all the records of a bucket

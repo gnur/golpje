@@ -137,10 +137,15 @@ func (idx *ListIndex) All(value []byte, opts *Options) ([][]byte, error) {
 	k, id := c.Seek(prefix)
 	if cur.Reverse {
 		var count int
-		for ; bytes.HasPrefix(k, prefix) && k != nil; k, _ = c.Next() {
+		kc := k
+		idc := id
+		for ; kc != nil && bytes.HasPrefix(kc, prefix); kc, idc = c.Next() {
 			count++
+			k, id = kc, idc
 		}
-		k, id = c.Prev()
+		if kc != nil {
+			k, id = c.Prev()
+		}
 		list = make([][]byte, 0, count)
 	}
 
@@ -230,6 +235,39 @@ func (idx *ListIndex) Range(min []byte, max []byte, opts *Options) ([][]byte, er
 		list = append(list, id)
 	}
 
+	return list, nil
+}
+
+// Prefix returns the ids whose values have the given prefix.
+func (idx *ListIndex) Prefix(prefix []byte, opts *Options) ([][]byte, error) {
+	var list [][]byte
+
+	c := internal.PrefixCursor{
+		C:       idx.IndexBucket.Cursor(),
+		Reverse: opts != nil && opts.Reverse,
+		Prefix:  prefix,
+	}
+
+	for k, id := c.First(); k != nil && c.Continue(k); k, id = c.Next() {
+		if id == nil || bytes.Equal(k, []byte("storm__ids")) {
+			continue
+		}
+
+		if opts != nil && opts.Skip > 0 {
+			opts.Skip--
+			continue
+		}
+
+		if opts != nil && opts.Limit == 0 {
+			break
+		}
+
+		if opts != nil && opts.Limit > 0 {
+			opts.Limit--
+		}
+
+		list = append(list, id)
+	}
 	return list, nil
 }
 

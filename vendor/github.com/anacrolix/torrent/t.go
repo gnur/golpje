@@ -1,7 +1,6 @@
 package torrent
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/anacrolix/missinggo/pubsub"
@@ -25,6 +24,8 @@ func (t *Torrent) GotInfo() <-chan struct{} {
 
 // Returns the metainfo info dictionary, or nil if it's not yet available.
 func (t *Torrent) Info() *metainfo.Info {
+	t.cl.mu.Lock()
+	defer t.cl.mu.Unlock()
 	return t.info
 }
 
@@ -162,9 +163,7 @@ func (t *Torrent) CancelPieces(begin, end int) {
 // Returns handles to the files in the torrent. This requires the metainfo is
 // available first.
 func (t *Torrent) Files() (ret []File) {
-	t.cl.mu.Lock()
 	info := t.Info()
-	t.cl.mu.Unlock()
 	if info == nil {
 		return
 	}
@@ -200,7 +199,7 @@ func (t *Torrent) DownloadAll() {
 func (t *Torrent) String() string {
 	s := t.name()
 	if s == "" {
-		s = fmt.Sprintf("%x", t.infoHash)
+		s = t.infoHash.HexString()
 	}
 	return s
 }
@@ -209,4 +208,10 @@ func (t *Torrent) AddTrackers(announceList [][]string) {
 	t.cl.mu.Lock()
 	defer t.cl.mu.Unlock()
 	t.addTrackers(announceList)
+}
+
+func (t *Torrent) Piece(i int) *Piece {
+	t.cl.mu.Lock()
+	defer t.cl.mu.Unlock()
+	return &t.pieces[i]
 }

@@ -8,7 +8,7 @@ log "generating proto shizzles"
 protoc --proto_path=./ -I../golpje/ --go_out=plugins=grpc:golpje/ golpje.proto
 
 log "updating dependencies"
-go get -d .
+go get -u -d .
 log "building"
 mkdir -p dist
 go build -o dist/golpje *.go
