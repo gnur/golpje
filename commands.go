@@ -17,11 +17,6 @@ func init() {
 	}
 
 	Commands = map[string]cli.CommandFactory{
-		"event": func() (cli.Command, error) {
-			return &command.EventCommand{
-				Cfg: cfg,
-			}, nil
-		},
 		"start": func() (cli.Command, error) {
 			return &command.ControllerCommand{
 				Cfg: cfg,

@@ -13,13 +13,6 @@ message ProtoShow {
     int64 Minimal = 6;
 }
 
-message ProtoEvent {
-    string ID = 1;
-    int64 Timestamp = 2;
-    repeated string related = 3;
-    string Data = 4;
-}
-
 message ProtoEpisode {
     string ID = 1;
     string Title = 2;
@@ -29,15 +22,6 @@ message ProtoEpisode {
     string Episodeid = 6;
     bool Downloaded = 7;
     bool Downloading = 8;
-}
-
-message ProtoEvents {
-    repeated ProtoEvent Events = 1;
-}
-
-message EventRequest {
-    bool All = 1;
-    int64 Since = 2;
 }
 
 message ProtoShows {
@@ -81,8 +65,6 @@ message SyncShowRequest {
 }
 
 service Golpje {
-    rpc GetEvents (EventRequest) returns (ProtoEvents) {}
-
     rpc GetShows (ShowRequest) returns (ProtoShows) {}
     rpc AddShow (ProtoShow) returns (AddShowResponse) {}
     rpc DelShow (ProtoShow) returns (AddShowResponse) {}

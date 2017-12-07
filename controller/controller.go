@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -16,7 +15,6 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/asdine/storm"
 	"github.com/gnur/golpje/downloader"
-	"github.com/gnur/golpje/events"
 	pb "github.com/gnur/golpje/golpje"
 	"github.com/gnur/golpje/searcher"
 	"github.com/gnur/golpje/shows"
@@ -109,6 +107,24 @@ func Start(config *viper.Viper) error {
 }
 
 func (con *controller) resulthandler() {
+	var failedDownloadsCounter prometheus.Counter
+	var completedDownloadsCounter prometheus.Counter
+	if con.config.GetBool("metrics_enabled") {
+		failedDownloadsCounter = prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "golpje_failed_downloads",
+				Help: "number of failed downloads",
+			},
+		)
+		completedDownloadsCounter = prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "golpje_completed_downloads",
+				Help: "number of completed downloads",
+			},
+		)
+		prometheus.MustRegister(completedDownloadsCounter)
+		prometheus.MustRegister(failedDownloadsCounter)
+	}
 	for res := range con.Searchresults {
 		fmt.Println("--------------")
 		if res.Seeders < 10 || !strings.Contains(res.Title, "264") {
@@ -137,7 +153,6 @@ func (con *controller) resulthandler() {
 			continue
 		}
 
-		events.New(con.db, fmt.Sprintf("Starting download of %s", res.Title), []string{res.ShowID, downloadID})
 		fmt.Println("starting download")
 		fmt.Println(downloadID)
 		resultChannel := make(chan downloader.Result)
@@ -155,12 +170,17 @@ func (con *controller) resulthandler() {
 		if !downloadResult.Completed {
 			fmt.Println("Download did not complete")
 			fmt.Println(downloadResult.Error)
-			events.New(con.db, fmt.Sprintf("Download of %s failed; %s", res.Title, downloadResult.Error), []string{res.ShowID, downloadID})
 			show.SetDownloadFailed(con.db, res.Title)
+			if con.config.GetBool("metrics_enabled") {
+				failedDownloadsCounter.Inc()
+			}
 			continue
 		}
 
 		fmt.Println("download completed")
+		if con.config.GetBool("metrics_enabled") {
+			completedDownloadsCounter.Inc()
+		}
 		var largestFile torrent.File
 		var largest int64
 		largest = 0
@@ -187,31 +207,8 @@ func (con *controller) resulthandler() {
 			fmt.Println("rename error: ", err.Error())
 			continue
 		}
-		events.New(con.db, fmt.Sprintf("Completed download of %s", res.Title), []string{res.ShowID, downloadID})
 		show.SetDownloaded(con.db, res.Title)
 	}
-}
-
-func (con *controller) GetEvents(ctx context.Context, in *pb.EventRequest) (*pb.ProtoEvents, error) {
-	var ev []events.Event
-	var err error
-	if in.All {
-		ev, err = events.All(con.db)
-	} else {
-		ev, err = events.After(con.db, time.Unix(0, in.Since))
-	}
-	if err != nil {
-		fmt.Println(err.Error())
-		return &pb.ProtoEvents{}, err
-	}
-
-	var retEvents []*pb.ProtoEvent
-	for _, event := range ev {
-		retEvents = append(retEvents, event.ToProto())
-	}
-	return &pb.ProtoEvents{
-		Events: retEvents,
-	}, nil
 }
 
 func (con *controller) GetShows(ctx context.Context, in *pb.ShowRequest) (*pb.ProtoShows, error) {

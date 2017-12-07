@@ -1,12 +1,10 @@
 package searcher
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/asdine/storm"
 	"github.com/gnur/go-piratebay"
-	"github.com/gnur/golpje/events"
 	"github.com/gnur/golpje/shows"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -41,10 +39,8 @@ func Start(db *storm.DB, piratebayURL string, results chan Searchresult, searchI
 			if m.Enabled {
 				m.Searches.Inc()
 			}
-			events.New(db, fmt.Sprintf("Searching for new episodes of %s", show.Name), []string{show.ID})
 			torrents, err := pb.Search(show.Name)
 			if err != nil {
-				events.New(db, fmt.Sprintf("Search failed for %s, %s", show.Name, err.Error()), []string{show.ID})
 				if m.Enabled {
 					m.FailedSearches.Inc()
 				}
