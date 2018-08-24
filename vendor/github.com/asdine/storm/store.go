@@ -6,10 +6,10 @@ import (
 
 	"github.com/asdine/storm/index"
 	"github.com/asdine/storm/q"
-	"github.com/boltdb/bolt"
+	"github.com/coreos/bbolt"
 )
 
-// TypeStore stores user defined types in BoltDB
+// TypeStore stores user defined types in BoltDB.
 type TypeStore interface {
 	Finder
 	// Init creates the indexes and buckets for a given structure
@@ -32,10 +32,6 @@ type TypeStore interface {
 
 	// DeleteStruct deletes a structure from the associated bucket
 	DeleteStruct(data interface{}) error
-
-	// Remove deletes a structure from the associated bucket
-	// Deprecated: Use DeleteStruct instead.
-	Remove(data interface{}) error
 }
 
 // Init creates the indexes and buckets for a given structure
@@ -152,7 +148,7 @@ func (n *node) Save(data interface{}) error {
 	}
 
 	if cfg.ID.IsZero {
-		if !cfg.ID.IsInteger || (!n.s.autoIncrement && !cfg.ID.Increment) {
+		if !cfg.ID.IsInteger || !cfg.ID.Increment {
 			return ErrZeroID
 		}
 	}
@@ -181,7 +177,7 @@ func (n *node) save(tx *bolt.Tx, cfg *structConfig, data interface{}, update boo
 		}
 	}
 
-	id, err := toBytes(cfg.ID.Value.Interface(), n.s.codec)
+	id, err := toBytes(cfg.ID.Value.Interface(), n.codec)
 	if err != nil {
 		return err
 	}
@@ -215,7 +211,7 @@ func (n *node) save(tx *bolt.Tx, cfg *structConfig, data interface{}, update boo
 			continue
 		}
 
-		value, err := toBytes(fieldCfg.Value.Interface(), n.s.codec)
+		value, err := toBytes(fieldCfg.Value.Interface(), n.codec)
 		if err != nil {
 			return err
 		}
@@ -250,7 +246,7 @@ func (n *node) save(tx *bolt.Tx, cfg *structConfig, data interface{}, update boo
 		}
 	}
 
-	raw, err := n.s.codec.Marshal(data)
+	raw, err := n.codec.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -385,7 +381,7 @@ func (n *node) DeleteStruct(data interface{}) error {
 		return err
 	}
 
-	id, err := toBytes(cfg.ID.Value.Interface(), n.s.codec)
+	id, err := toBytes(cfg.ID.Value.Interface(), n.codec)
 	if err != nil {
 		return err
 	}
@@ -426,10 +422,4 @@ func (n *node) deleteStruct(tx *bolt.Tx, cfg *structConfig, id []byte) error {
 	}
 
 	return bucket.Delete(id)
-}
-
-// Remove deletes a structure from the associated bucket
-// Deprecated: Use DeleteStruct instead.
-func (n *node) Remove(data interface{}) error {
-	return n.DeleteStruct(data)
 }
