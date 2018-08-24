@@ -1,0 +1,9 @@
+searchinterval = "54m"
+piratebayurl = "https://pirateunblocker.me"
+
+[shows."daily show"]
+seasonal = false
+maxage = 14
+regexp = "daily.*show"
+minimal = 2018
+active = true

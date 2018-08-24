@@ -3,4 +3,3 @@ dist/*
 .idea/shows/
 debug
 golpje.db
-vendor/
