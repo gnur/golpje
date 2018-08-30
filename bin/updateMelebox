@@ -12,4 +12,4 @@ export GOARCH=amd64
 
 go build -o dist/golpje ./*.go
 
-scp dist/golpje melebox:/tmp/golpje-2.0
+scp dist/golpje hetty:/tmp/golpje

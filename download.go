@@ -44,7 +44,7 @@ func downloadMagnetLink(magnetlink, targetDirectory string) (*torrent.Torrent, e
 		"targetDirectory": targetDirectory,
 		"scope":           "downloadMagnetLink",
 	})
-	cfg := torrent.Config{
+	cfg := torrent.ClientConfig{
 		DataDir: targetDirectory,
 	}
 	ctxLog.Info("Downloading new torrent")
