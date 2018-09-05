@@ -55,6 +55,7 @@ require (
 	github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910
 	github.com/prometheus/common v0.0.0-20180801064454-c7de2306084e
 	github.com/prometheus/procfs v0.0.0-20180725123919-05ee40e3a273
+	github.com/qopher/go-torrentapi v0.0.0-20180324211201-2fa27345de9c
 	github.com/ryszard/goskiplist v0.0.0-20150312221310-2dfbae5fcf46
 	github.com/sasha-s/go-deadlock v0.2.0
 	github.com/sirupsen/logrus v1.0.6

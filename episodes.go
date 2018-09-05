@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gnur/go-piratebay"
 	"github.com/gnur/golpje/config"
+	"github.com/gnur/golpje/search"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,7 +33,7 @@ var (
 )
 
 // ShouldDownload takes a show and torrent and returns whether this should be downloaded
-func ShouldDownload(show *config.Show, res piratebay.Torrent) (bool, string) {
+func ShouldDownload(show *config.Show, res search.Result) (bool, string) {
 
 	l := log.WithFields(log.Fields{
 		"show":  show.Regexp,

@@ -15,7 +15,7 @@ import (
 type Cfg struct {
 	Store          s3local.Store
 	Searchinterval duration
-	Piratebayurl   string
+	SearchEngine   string
 	Shows          map[string]*Show
 	ConvertToMP4   bool
 }

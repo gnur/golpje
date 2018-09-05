@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gnur/go-piratebay"
 	"github.com/gnur/golpje/config"
+	"github.com/gnur/golpje/search"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,8 +52,7 @@ func runOnce() {
 					}
 				}
 			}
-			pb := piratebay.New(cfg.Piratebayurl)
-			torrents, err := pb.Search(name)
+			torrents, err := search.TorrentAPI(name)
 			if err != nil {
 				showLog.WithField("err", err).Warning("Searching failed")
 				continue
