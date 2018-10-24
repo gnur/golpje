@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gnur/golpje/config"
 	"github.com/gnur/golpje/search"
@@ -12,28 +13,35 @@ import (
 )
 
 func init() {
-	// Can be any io.Writer, see below for File example
 	log.SetOutput(os.Stdout)
-
-	// Only log the warning severity or above.
 	log.SetLevel(log.InfoLevel)
 }
 
 func main() {
-	if os.Getenv("GOLPJE_DAEMONIZE") != "" {
-		// do this in a loop
-		log.Info("doing nothing, this would do runonce in a loop")
-	}
+	for {
+		cfg, err := config.Load()
 
-	runOnce()
+		if err != nil {
+			log.WithField("error", err).Error("Loading configuration failed")
+			return
+		}
+		level, err := log.ParseLevel(cfg.LogLevel)
+		if err == nil {
+			log.SetLevel(level)
+		}
+		runOnce(cfg)
+		if os.Getenv("GOLPJE_DAEMONIZE") == "" {
+			return
+		}
+		log.WithFields(log.Fields{
+			"duration": cfg.Searchinterval.Duration.String(),
+			"wakeup":   time.Now().Add(cfg.Searchinterval.Duration).String(),
+		}).Info("Sleeping until next search")
+		time.Sleep(cfg.Searchinterval.Duration)
+	}
 }
 
-func runOnce() {
-	cfg, err := config.Load()
-	if err != nil {
-		log.WithField("error", err).Error("Loading configuration failed")
-		return
-	}
+func runOnce(cfg *config.Cfg) {
 	for name, show := range cfg.Shows {
 		if show.Active {
 			showLog := log.WithField("show", name)

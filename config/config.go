@@ -15,7 +15,7 @@ import (
 type Cfg struct {
 	Store          s3local.Store
 	Searchinterval duration
-	SearchEngine   string
+	LogLevel       string
 	Shows          map[string]*Show
 	ConvertToMP4   bool
 }
@@ -39,8 +39,6 @@ func (d *duration) UnmarshalText(text []byte) error {
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
 }
-
-// Settings hold settings defined by toml file
 
 // Load uses env GOLPJE_STORAGE to determine storage location
 func Load() (*Cfg, error) {
@@ -79,14 +77,19 @@ func Load() (*Cfg, error) {
 	}
 
 	v.Store = store
+	log.Debug("loading golpje.toml")
 	f, err := v.Store.Read("golpje.toml")
 	if err != nil {
+		log.WithField("err", err).Warning("could not read golpje.toml")
 		return nil, err
 	}
+	log.WithField("config", string(f)).Debug("decoding golpje.toml")
 	_, err = toml.Decode(string(f), &v)
 	if err != nil {
+		log.WithField("err", err).Warning("could not decode golpje.toml")
 		return nil, err
 	}
+	log.Debug("loaded config")
 
 	return &v, nil
 }
