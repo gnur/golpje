@@ -12,13 +12,13 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
-
-	"github.com/anacrolix/dht/krpc"
+	"golang.org/x/time/rate"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -32,7 +32,7 @@ type Server struct {
 	id     int160
 	socket net.PacketConn
 
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	transactions map[transactionKey]*Transaction
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
@@ -41,6 +41,8 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
+
+	announceContactRateLimiter *rate.Limiter
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -142,6 +144,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
+		announceContactRateLimiter: rate.NewLimiter(10, 10),
 	}
 	rand.Read(s.tokenServer.secret)
 	s.socket = c.Conn
@@ -674,9 +677,7 @@ type TraversalStats struct {
 
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {
-	s.mu.Lock()
 	initialAddrs, err := s.traversalStartingAddrs()
-	s.mu.Unlock()
 	if err != nil {
 		return
 	}
@@ -752,7 +753,7 @@ func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, er
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.addResponseNodes(m)
-		if m.R != nil && m.R.Token != "" {
+		if m.R != nil && m.R.Token != "" && m.SenderID() != nil {
 			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
 				n.announceToken = m.R.Token
 			}
@@ -780,10 +781,12 @@ func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*
 }
 
 func (s *Server) traversalStartingAddrs() (addrs []Addr, err error) {
+	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
 		addrs = append(addrs, n.addr)
 		return true
 	})
+	s.mu.RUnlock()
 	if len(addrs) > 0 {
 		return
 	}

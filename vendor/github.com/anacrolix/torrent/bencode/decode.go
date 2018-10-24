@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
-	"strings"
+	"sync"
 )
 
 type Decoder struct {
@@ -112,7 +112,7 @@ func (d *Decoder) parseInt(v reflect.Value) {
 		})
 	}
 
-	s := d.buf.String()
+	s := bytesAsString(d.buf.Bytes())
 
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -153,40 +153,54 @@ func (d *Decoder) parseString(v reflect.Value) error {
 
 	// read the string length first
 	d.readUntil(':')
-	length, err := strconv.ParseInt(d.buf.String(), 10, 64)
+	length, err := strconv.ParseInt(bytesAsString(d.buf.Bytes()), 10, 0)
 	checkForIntParseError(err, start)
 
-	d.buf.Reset()
-	n, err := io.CopyN(&d.buf, d.r, length)
-	d.Offset += n
-	if err != nil {
-		checkForUnexpectedEOF(err, d.Offset)
-		panic(&SyntaxError{
-			Offset: d.Offset,
-			What:   errors.New("unexpected I/O error: " + err.Error()),
-		})
+	defer d.buf.Reset()
+
+	read := func(b []byte) {
+		n, err := io.ReadFull(d.r, b)
+		d.Offset += int64(n)
+		if err != nil {
+			checkForUnexpectedEOF(err, d.Offset)
+			panic(&SyntaxError{
+				Offset: d.Offset,
+				What:   errors.New("unexpected I/O error: " + err.Error()),
+			})
+		}
 	}
 
 	switch v.Kind() {
 	case reflect.String:
-		v.SetString(d.buf.String())
+		b := make([]byte, length)
+		read(b)
+		v.SetString(bytesAsString(b))
+		return nil
 	case reflect.Slice:
 		if v.Type().Elem().Kind() != reflect.Uint8 {
-			panic(&UnmarshalTypeError{
-				Value: "string",
-				Type:  v.Type(),
-			})
+			break
 		}
-		v.SetBytes(append([]byte(nil), d.buf.Bytes()...))
-	default:
-		return &UnmarshalTypeError{
-			Value: "string",
-			Type:  v.Type(),
+		b := make([]byte, length)
+		read(b)
+		v.SetBytes(b)
+		return nil
+	case reflect.Array:
+		if v.Type().Elem().Kind() != reflect.Uint8 {
+			break
 		}
+		d.buf.Grow(int(length))
+		b := d.buf.Bytes()[:length]
+		read(b)
+		reflect.Copy(v, reflect.ValueOf(b))
+		return nil
 	}
-
-	d.buf.Reset()
-	return nil
+	d.buf.Grow(int(length))
+	read(d.buf.Bytes()[:length])
+	// I believe we return here to support "ignore_unmarshal_type_error".
+	return &UnmarshalTypeError{
+		Value: "string",
+		Type:  v.Type(),
+	}
 }
 
 // Info for parsing a dict value.
@@ -209,8 +223,11 @@ func getDictField(dict reflect.Value, key string) dictField {
 			Value: value,
 			Ok:    true,
 			Set: func() {
+				if dict.IsNil() {
+					dict.Set(reflect.MakeMap(dict.Type()))
+				}
 				// Assigns the value into the map.
-				dict.SetMapIndex(reflect.ValueOf(key), value)
+				dict.SetMapIndex(reflect.ValueOf(key).Convert(dict.Type().Key()), value)
 			},
 		}
 	case reflect.Struct:
@@ -218,74 +235,72 @@ func getDictField(dict reflect.Value, key string) dictField {
 		if !ok {
 			return dictField{}
 		}
-		if sf.PkgPath != "" {
+		if sf.r.PkgPath != "" {
 			panic(&UnmarshalFieldError{
 				Key:   key,
 				Type:  dict.Type(),
-				Field: sf,
+				Field: sf.r,
 			})
 		}
 		return dictField{
-			Value:                    dict.FieldByIndex(sf.Index),
+			Value:                    dict.FieldByIndex(sf.r.Index),
 			Ok:                       true,
 			Set:                      func() {},
-			IgnoreUnmarshalTypeError: getTag(sf.Tag).IgnoreUnmarshalTypeError(),
+			IgnoreUnmarshalTypeError: sf.tag.IgnoreUnmarshalTypeError(),
 		}
 	default:
-		panic(dict.Kind())
+		return dictField{}
 	}
 }
 
-func getStructFieldForKey(struct_ reflect.Type, key string) (f reflect.StructField, ok bool) {
+type structField struct {
+	r   reflect.StructField
+	tag tag
+}
+
+var (
+	structFieldsMu sync.Mutex
+	structFields   = map[reflect.Type]map[string]structField{}
+)
+
+func parseStructFields(struct_ reflect.Type, each func(string, structField)) {
 	for i, n := 0, struct_.NumField(); i < n; i++ {
-		f = struct_.Field(i)
-		tag := f.Tag.Get("bencode")
-		if tag == "-" {
-			continue
-		}
+		f := struct_.Field(i)
 		if f.Anonymous {
 			continue
 		}
-
-		if parseTag(tag).Key() == key {
-			ok = true
-			break
+		tagStr := f.Tag.Get("bencode")
+		if tagStr == "-" {
+			continue
 		}
-
-		if f.Name == key {
-			ok = true
-			break
+		tag := parseTag(tagStr)
+		key := tag.Key()
+		if key == "" {
+			key = f.Name
 		}
-
-		if strings.EqualFold(f.Name, key) {
-			ok = true
-			break
-		}
+		each(key, structField{f, tag})
 	}
+}
+
+func saveStructFields(struct_ reflect.Type) {
+	m := make(map[string]structField)
+	parseStructFields(struct_, func(key string, sf structField) {
+		m[key] = sf
+	})
+	structFields[struct_] = m
+}
+
+func getStructFieldForKey(struct_ reflect.Type, key string) (f structField, ok bool) {
+	structFieldsMu.Lock()
+	if _, ok := structFields[struct_]; !ok {
+		saveStructFields(struct_)
+	}
+	f, ok = structFields[struct_][key]
+	structFieldsMu.Unlock()
 	return
 }
 
 func (d *Decoder) parseDict(v reflect.Value) error {
-	switch v.Kind() {
-	case reflect.Map:
-		t := v.Type()
-		if t.Key().Kind() != reflect.String {
-			panic(&UnmarshalTypeError{
-				Value: "object",
-				Type:  t,
-			})
-		}
-		if v.IsNil() {
-			v.Set(reflect.MakeMap(t))
-		}
-	case reflect.Struct:
-	default:
-		panic(&UnmarshalTypeError{
-			Value: "object",
-			Type:  v.Type(),
-		})
-	}
-
 	// so, at this point 'd' byte was consumed, let's just read key/value
 	// pairs one by one
 	for {
@@ -404,7 +419,7 @@ func (d *Decoder) readOneValue() bool {
 		if b >= '0' && b <= '9' {
 			start := d.buf.Len() - 1
 			d.readUntil(':')
-			length, err := strconv.ParseInt(d.buf.String()[start:], 10, 64)
+			length, err := strconv.ParseInt(bytesAsString(d.buf.Bytes()[start:]), 10, 64)
 			checkForIntParseError(err, d.Offset-1)
 
 			d.buf.WriteString(":")
@@ -428,29 +443,23 @@ func (d *Decoder) readOneValue() bool {
 }
 
 func (d *Decoder) parseUnmarshaler(v reflect.Value) bool {
-	m, ok := v.Interface().(Unmarshaler)
-	if !ok {
-		// T doesn't work, try *T
-		if v.Kind() != reflect.Ptr && v.CanAddr() {
-			m, ok = v.Addr().Interface().(Unmarshaler)
-			if ok {
-				v = v.Addr()
-			}
+	if !v.Type().Implements(unmarshalerType) {
+		if v.Addr().Type().Implements(unmarshalerType) {
+			v = v.Addr()
+		} else {
+			return false
 		}
 	}
-	if ok && (v.Kind() != reflect.Ptr || !v.IsNil()) {
-		if d.readOneValue() {
-			err := m.UnmarshalBencode(d.buf.Bytes())
-			d.buf.Reset()
-			if err != nil {
-				panic(&UnmarshalerError{v.Type(), err})
-			}
-			return true
-		}
-		d.buf.Reset()
+	d.buf.Reset()
+	if !d.readOneValue() {
+		return false
 	}
-
-	return false
+	m := v.Interface().(Unmarshaler)
+	err := m.UnmarshalBencode(d.buf.Bytes())
+	if err != nil {
+		panic(&UnmarshalerError{v.Type(), err})
+	}
+	return true
 }
 
 // Returns true if there was a value and it's now stored in 'v', otherwise
@@ -497,7 +506,7 @@ func (d *Decoder) parseValue(v reflect.Value) (bool, error) {
 		if b >= '0' && b <= '9' {
 			// It's a string.
 			d.buf.Reset()
-			// Write the  first digit of the length to the buffer.
+			// Write the first digit of the length to the buffer.
 			d.buf.WriteByte(b)
 			return true, d.parseString(v)
 		}

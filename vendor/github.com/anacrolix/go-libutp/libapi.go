@@ -4,7 +4,11 @@ package utp
 #include "utp.h"
 */
 import "C"
-import "sync"
+import (
+	"errors"
+
+	"github.com/anacrolix/sync"
+)
 
 type Option = C.int
 
@@ -15,6 +19,8 @@ const (
 	SendBuffer  Option = C.UTP_SNDBUF
 	RecvBuffer  Option = C.UTP_RCVBUF
 	TargetDelay Option = C.UTP_TARGET_DELAY
+
+	TimedOut = C.UTP_ETIMEDOUT
 )
 
 var (
@@ -24,4 +30,8 @@ var (
 
 func getSocketForLibContext(uc *C.utp_context) *Socket {
 	return libContextToSocket[uc]
+}
+
+func errorForCode(code C.int) error {
+	return errors.New(libErrorCodeNames(code))
 }

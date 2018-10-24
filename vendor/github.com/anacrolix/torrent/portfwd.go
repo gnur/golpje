@@ -5,11 +5,10 @@ import (
 	"time"
 
 	flog "github.com/anacrolix/log"
-	"github.com/syncthing/syncthing/lib/nat"
-	"github.com/syncthing/syncthing/lib/upnp"
+	"github.com/elgatito/upnp"
 )
 
-func addPortMapping(d nat.Device, proto nat.Protocol, internalPort int, debug bool) {
+func addPortMapping(d upnp.Device, proto upnp.Protocol, internalPort int, debug bool) {
 	externalPort, err := d.AddPortMapping(proto, internalPort, internalPort, "anacrolix/torrent", 0)
 	if err != nil {
 		log.Printf("error adding %s port mapping: %s", proto, err)
@@ -21,20 +20,20 @@ func addPortMapping(d nat.Device, proto nat.Protocol, internalPort int, debug bo
 }
 
 func (cl *Client) forwardPort() {
-	cl.mu.Lock()
-	defer cl.mu.Unlock()
+	cl.lock()
+	defer cl.unlock()
 	if cl.config.NoDefaultPortForwarding {
 		return
 	}
-	cl.mu.Unlock()
+	cl.unlock()
 	ds := upnp.Discover(0, 2*time.Second)
-	cl.mu.Lock()
+	cl.lock()
 	flog.Default.Handle(flog.Fmsg("discovered %d upnp devices", len(ds)))
 	port := cl.incomingPeerPort()
-	cl.mu.Unlock()
+	cl.unlock()
 	for _, d := range ds {
-		go addPortMapping(d, nat.TCP, port, cl.config.Debug)
-		go addPortMapping(d, nat.UDP, port, cl.config.Debug)
+		go addPortMapping(d, upnp.TCP, port, cl.config.Debug)
+		go addPortMapping(d, upnp.UDP, port, cl.config.Debug)
 	}
-	cl.mu.Lock()
+	cl.lock()
 }

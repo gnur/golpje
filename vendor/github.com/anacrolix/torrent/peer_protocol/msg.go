@@ -12,7 +12,7 @@ type Message struct {
 	Index, Begin, Length Integer
 	Piece                []byte
 	Bitfield             []bool
-	ExtendedID           byte
+	ExtendedID           ExtensionNumber
 	ExtendedPayload      []byte
 	Port                 uint16
 }
@@ -23,6 +23,20 @@ func MakeCancelMessage(piece, offset, length Integer) Message {
 		Index:  piece,
 		Begin:  offset,
 		Length: length,
+	}
+}
+
+func (msg Message) RequestSpec() (ret RequestSpec) {
+	return RequestSpec{
+		msg.Index,
+		msg.Begin,
+		func() Integer {
+			if msg.Type == Piece {
+				return Integer(len(msg.Piece))
+			} else {
+				return msg.Length
+			}
+		}(),
 	}
 }
 
@@ -69,7 +83,7 @@ func (msg Message) MarshalBinary() (data []byte, err error) {
 				panic(n)
 			}
 		case Extended:
-			err = buf.WriteByte(msg.ExtendedID)
+			err = buf.WriteByte(byte(msg.ExtendedID))
 			if err != nil {
 				return
 			}

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/anacrolix/torrent/metainfo"
-	pwp "github.com/anacrolix/torrent/peer_protocol"
 )
 
 // Provides access to regions of torrent data that correspond to its files.
@@ -60,12 +59,12 @@ type FilePieceState struct {
 
 // Returns the state of pieces in this file.
 func (f *File) State() (ret []FilePieceState) {
-	f.t.cl.mu.RLock()
-	defer f.t.cl.mu.RUnlock()
+	f.t.cl.rLock()
+	defer f.t.cl.rUnlock()
 	pieceSize := int64(f.t.usualPieceSize())
 	off := f.offset % pieceSize
 	remaining := f.length
-	for i := int(f.offset / pieceSize); ; i++ {
+	for i := pieceIndex(f.offset / pieceSize); ; i++ {
 		if remaining == 0 {
 			break
 		}
@@ -103,7 +102,7 @@ func (f *File) Cancel() {
 
 func (f *File) NewReader() Reader {
 	tr := reader{
-		mu:        &f.t.cl.mu,
+		mu:        f.t.cl.locker(),
 		t:         f.t,
 		readahead: 5 * 1024 * 1024,
 		offset:    f.Offset(),
@@ -115,32 +114,32 @@ func (f *File) NewReader() Reader {
 
 // Sets the minimum priority for pieces in the File.
 func (f *File) SetPriority(prio piecePriority) {
-	f.t.cl.mu.Lock()
-	defer f.t.cl.mu.Unlock()
+	f.t.cl.lock()
+	defer f.t.cl.unlock()
 	if prio == f.prio {
 		return
 	}
 	f.prio = prio
-	f.t.updatePiecePriorities(f.firstPieceIndex().Int(), f.endPieceIndex().Int())
+	f.t.updatePiecePriorities(f.firstPieceIndex(), f.endPieceIndex())
 }
 
 // Returns the priority per File.SetPriority.
 func (f *File) Priority() piecePriority {
-	f.t.cl.mu.Lock()
-	defer f.t.cl.mu.Unlock()
+	f.t.cl.lock()
+	defer f.t.cl.unlock()
 	return f.prio
 }
 
-func (f *File) firstPieceIndex() pwp.Integer {
+func (f *File) firstPieceIndex() pieceIndex {
 	if f.t.usualPieceSize() == 0 {
 		return 0
 	}
-	return pwp.Integer(f.offset / int64(f.t.usualPieceSize()))
+	return pieceIndex(f.offset / int64(f.t.usualPieceSize()))
 }
 
-func (f *File) endPieceIndex() pwp.Integer {
+func (f *File) endPieceIndex() pieceIndex {
 	if f.t.usualPieceSize() == 0 {
 		return 0
 	}
-	return pwp.Integer((f.offset+f.length-1)/int64(f.t.usualPieceSize())) + 1
+	return pieceIndex((f.offset+f.length-1)/int64(f.t.usualPieceSize())) + 1
 }

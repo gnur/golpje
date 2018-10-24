@@ -1,11 +1,12 @@
 package bencode
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"reflect"
+
+	"github.com/anacrolix/missinggo/expect"
 )
 
 //----------------------------------------------------------------------------
@@ -109,16 +110,22 @@ type Unmarshaler interface {
 	UnmarshalBencode([]byte) error
 }
 
-// Marshal the value 'v' to the bencode form, return the result as []byte and an
-// error if any.
+// Marshal the value 'v' to the bencode form, return the result as []byte and
+// an error if any.
 func Marshal(v interface{}) ([]byte, error) {
 	var buf bytes.Buffer
-	e := Encoder{w: bufio.NewWriter(&buf)}
+	e := Encoder{w: &buf}
 	err := e.Encode(v)
 	if err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func MustMarshal(v interface{}) []byte {
+	b, err := Marshal(v)
+	expect.Nil(err)
+	return b
 }
 
 // Unmarshal the bencode value in the 'data' to a value pointed by the 'v'
@@ -146,5 +153,5 @@ func NewDecoder(r io.Reader) *Decoder {
 }
 
 func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w: bufio.NewWriter(w)}
+	return &Encoder{w: w}
 }

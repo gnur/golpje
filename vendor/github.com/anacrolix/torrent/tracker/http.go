@@ -2,12 +2,14 @@ package tracker
 
 import (
 	"bytes"
-	"errors"
+	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo/httptoo"
@@ -69,6 +71,7 @@ func setAnnounceParams(_url *url.URL, ar *AnnounceRequest, opts Announce) {
 
 	q.Set("info_hash", string(ar.InfoHash[:]))
 	q.Set("peer_id", string(ar.PeerId[:]))
+	// AFAICT, port is mandatory, and there's no implied port key.
 	q.Set("port", fmt.Sprintf("%d", ar.Port))
 	q.Set("uploaded", strconv.FormatInt(ar.Uploaded, 10))
 	q.Set("downloaded", strconv.FormatInt(ar.Downloaded, 10))
@@ -96,7 +99,19 @@ func announceHTTP(opt Announce, _url *url.URL) (ret AnnounceResponse, err error)
 	req, err := http.NewRequest("GET", _url.String(), nil)
 	req.Header.Set("User-Agent", opt.UserAgent)
 	req.Host = opt.HostHeader
-	resp, err := opt.HttpClient.Do(req)
+	resp, err := (&http.Client{
+		Timeout: time.Second * 15,
+		Transport: &http.Transport{
+			Dial: (&net.Dialer{
+				Timeout: 15 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 15 * time.Second,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				ServerName:         opt.ServerName,
+			},
+		},
+	}).Do(req)
 	if err != nil {
 		return
 	}
@@ -109,12 +124,14 @@ func announceHTTP(opt Announce, _url *url.URL) (ret AnnounceResponse, err error)
 	}
 	var trackerResponse httpResponse
 	err = bencode.Unmarshal(buf.Bytes(), &trackerResponse)
-	if err != nil {
+	if _, ok := err.(bencode.ErrUnusedTrailingBytes); ok {
+		err = nil
+	} else if err != nil {
 		err = fmt.Errorf("error decoding %q: %s", buf.Bytes(), err)
 		return
 	}
 	if trackerResponse.FailureReason != "" {
-		err = errors.New(trackerResponse.FailureReason)
+		err = fmt.Errorf("tracker gave failure reason: %q", trackerResponse.FailureReason)
 		return
 	}
 	vars.Add("successful http announces", 1)

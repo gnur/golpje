@@ -107,15 +107,15 @@ func (me *trackerScraper) announce() (ret trackerAnnounceResult) {
 		ret.Err = fmt.Errorf("error getting ip: %s", err)
 		return
 	}
-	me.t.cl.mu.Lock()
+	me.t.cl.lock()
 	req := me.t.announceRequest()
-	me.t.cl.mu.Unlock()
+	me.t.cl.unlock()
 	res, err := tracker.Announce{
-		HttpClient: me.t.cl.config.HTTP,
 		UserAgent:  me.t.cl.config.HTTPUserAgent,
 		TrackerUrl: me.trackerUrl(ip),
 		Request:    req,
 		HostHeader: me.u.Host,
+		ServerName: me.u.Hostname(),
 		UdpNetwork: me.u.Scheme,
 		ClientIp4:  krpc.NodeAddr{IP: me.t.cl.config.PublicIp4},
 		ClientIp6:  krpc.NodeAddr{IP: me.t.cl.config.PublicIp6},
@@ -124,7 +124,7 @@ func (me *trackerScraper) announce() (ret trackerAnnounceResult) {
 		ret.Err = fmt.Errorf("error announcing: %s", err)
 		return
 	}
-	me.t.AddPeers(Peers(nil).FromTracker(res.Peers))
+	me.t.AddPeers(Peers(nil).AppendFromTracker(res.Peers))
 	ret.NumPeers = len(res.Peers)
 	ret.Interval = time.Duration(res.Interval) * time.Second
 	return
@@ -132,27 +132,34 @@ func (me *trackerScraper) announce() (ret trackerAnnounceResult) {
 
 func (me *trackerScraper) Run() {
 	for {
+		ar := me.announce()
+		me.t.cl.lock()
+		me.lastAnnounce = ar
+		me.t.cl.unlock()
+
+	wait:
+		interval := ar.Interval
+		if interval < time.Minute {
+			interval = time.Minute
+		}
+		wantPeers := me.t.wantPeersEvent.LockedChan(me.t.cl.locker())
 		select {
-		case <-me.t.closed.LockedChan(&me.t.cl.mu):
-			return
-		case <-me.stop.LockedChan(&me.t.cl.mu):
-			return
-		case <-me.t.wantPeersEvent.LockedChan(&me.t.cl.mu):
+		case <-wantPeers:
+			if interval > time.Minute {
+				interval = time.Minute
+			}
+			wantPeers = nil
+		default:
 		}
 
-		ar := me.announce()
-		me.t.cl.mu.Lock()
-		me.lastAnnounce = ar
-		me.t.cl.mu.Unlock()
-
-		intervalChan := time.After(time.Until(ar.Completed.Add(ar.Interval)))
-
 		select {
-		case <-me.t.closed.LockedChan(&me.t.cl.mu):
+		case <-me.t.closed.LockedChan(me.t.cl.locker()):
 			return
-		case <-me.stop.LockedChan(&me.t.cl.mu):
+		case <-me.stop.LockedChan(me.t.cl.locker()):
 			return
-		case <-intervalChan:
+		case <-wantPeers:
+			goto wait
+		case <-time.After(time.Until(ar.Completed.Add(interval))):
 		}
 	}
 }

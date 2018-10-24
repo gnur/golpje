@@ -2,33 +2,65 @@ package utp
 
 /*
 #include "utp.h"
+#include <stdbool.h>
+
+struct utp_process_udp_args {
+	const byte *buf;
+	size_t len;
+	const struct sockaddr *sa;
+	socklen_t sal;
+};
+
+void process_received_messages(utp_context *ctx, struct utp_process_udp_args *args, size_t argslen)
+{
+	bool gotUtp = false;
+	size_t i;
+	for (i = 0; i < argslen; i++) {
+		struct utp_process_udp_args *a = &args[i];
+		//if (!a->len) continue;
+		if (utp_process_udp(ctx, a->buf, a->len, a->sa, a->sal)) {
+			gotUtp = true;
+		}
+	}
+	if (gotUtp) {
+		utp_issue_deferred_acks(ctx);
+		utp_check_timeouts(ctx);
+	}
+}
 */
 import "C"
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
+	"runtime/pprof"
 	"time"
 
+	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/inproc"
 	"github.com/anacrolix/mmsg"
 )
 
 type Socket struct {
-	pc            net.PacketConn
-	ctx           *C.utp_context
-	backlog       chan *Conn
-	closed        bool
-	conns         map[*C.utp_socket]*Conn
-	nonUtpReads   chan packet
-	writeDeadline time.Time
-	readDeadline  time.Time
+	pc               net.PacketConn
+	ctx              *C.utp_context
+	backlog          chan *Conn
+	closed           bool
+	conns            map[*C.utp_socket]*Conn
+	nonUtpReads      chan packet
+	writeDeadline    time.Time
+	readDeadline     time.Time
+	firewallCallback FirewallCallback
+	// Whether the next accept is to be blocked.
+	block bool
 }
 
+type FirewallCallback func(net.Addr) bool
+
 var (
-	_ net.PacketConn = (*Socket)(nil)
-	_ net.Listener   = (*Socket)(nil)
+	_               net.PacketConn = (*Socket)(nil)
+	_               net.Listener   = (*Socket)(nil)
+	errSocketClosed                = errors.New("Socket closed")
 )
 
 type packet struct {
@@ -79,7 +111,8 @@ func (s *Socket) onLibSocketDestroyed(ls *C.utp_socket) {
 
 func (s *Socket) newConn(us *C.utp_socket) *Conn {
 	c := &Conn{
-		s:         us,
+		s:         s,
+		us:        us,
 		localAddr: s.pc.LocalAddr(),
 	}
 	c.cond.L = &mu
@@ -89,6 +122,8 @@ func (s *Socket) newConn(us *C.utp_socket) *Conn {
 	return c
 }
 
+const maxNumBuffers = 16
+
 func (s *Socket) packetReader() {
 	mc := mmsg.NewConn(s.pc)
 	// Increasing the messages increases the memory use, but also means we can
@@ -96,7 +131,7 @@ func (s *Socket) packetReader() {
 	// efficiency. On the flip side, not all OSs implement batched reads.
 	ms := make([]mmsg.Message, func() int {
 		if mc.Err() == nil {
-			return 16
+			return maxNumBuffers
 		} else {
 			return 1
 		}
@@ -146,24 +181,44 @@ func (s *Socket) packetReader() {
 		consecutiveErrors = 0
 		expMap.Add("successful mmsg receive calls", 1)
 		expMap.Add("received messages", int64(n))
-		func() {
-			mu.Lock()
-			defer mu.Unlock()
-			if s.closed {
-				return
-			}
-			gotUtp := false
-			for _, m := range ms[:n] {
-				gotUtp = s.processReceivedMessage(m.Buffers[0][:m.N], m.Addr) || gotUtp
-			}
-			if gotUtp {
-				C.utp_issue_deferred_acks(s.ctx)
-				// TODO: When is this done in C?
-				C.utp_check_timeouts(s.ctx)
-			}
-		}()
+		s.processReceivedMessages(ms[:n])
 	}
 }
+
+func (s *Socket) processReceivedMessages(ms []mmsg.Message) {
+	mu.Lock()
+	defer mu.Unlock()
+	if s.closed {
+		return
+	}
+	if processPacketsInC {
+		var args [maxNumBuffers]C.struct_utp_process_udp_args
+		for i, m := range ms {
+			a := &args[i]
+			a.buf = (*C.byte)(&m.Buffers[0][0])
+			a.len = C.size_t(m.N)
+			a.sa, a.sal = netAddrToLibSockaddr(m.Addr)
+		}
+		C.process_received_messages(s.ctx, &args[0], C.size_t(len(ms)))
+	} else {
+		gotUtp := false
+		for _, m := range ms {
+			gotUtp = s.processReceivedMessage(m.Buffers[0][:m.N], m.Addr) || gotUtp
+		}
+		if gotUtp && !s.closed {
+			s.afterReceivingUtpMessages()
+		}
+	}
+}
+
+func (s *Socket) afterReceivingUtpMessages() {
+	pprof.Do(context.Background(), pprof.Labels("go-libutp", "afterReceivingUtpMessages"), func(context.Context) {
+		C.utp_issue_deferred_acks(s.ctx)
+		// TODO: When is this done in C?
+		C.utp_check_timeouts(s.ctx)
+	})
+}
+
 func (s *Socket) processReceivedMessage(b []byte, addr net.Addr) (utp bool) {
 	if s.utpProcessUdp(b, addr) {
 		socketUtpPacketsReceived.Add(1)
@@ -174,6 +229,10 @@ func (s *Socket) processReceivedMessage(b []byte, addr net.Addr) (utp bool) {
 	}
 }
 
+// Process packet batches entirely from C, reducing CGO overhead. Currently
+// requires GODEBUG=cgocheck=0.
+const processPacketsInC = false
+
 // Wraps libutp's utp_process_udp, returning relevant information.
 func (s *Socket) utpProcessUdp(b []byte, addr net.Addr) (utp bool) {
 	sa, sal := netAddrToLibSockaddr(addr)
@@ -181,6 +240,21 @@ func (s *Socket) utpProcessUdp(b []byte, addr net.Addr) (utp bool) {
 		// The implementation of utp_process_udp rejects null buffers, and
 		// anything smaller than the UTP header size. It's also prone to
 		// assert on those, which we don't want to trigger.
+		return false
+	}
+	if missinggo.AddrPort(addr) == 0 {
+		return false
+	}
+	mu.Unlock()
+	block := func() bool {
+		if s.firewallCallback == nil {
+			return false
+		}
+		return s.firewallCallback(addr)
+	}()
+	mu.Lock()
+	s.block = block
+	if s.closed {
 		return false
 	}
 	ret := C.utp_process_udp(s.ctx, (*C.byte)(&b[0]), C.size_t(len(b)), sa, sal)
@@ -211,6 +285,10 @@ func (s *Socket) timeoutChecker() {
 func (s *Socket) Close() error {
 	mu.Lock()
 	defer mu.Unlock()
+	return s.closeLocked()
+}
+
+func (s *Socket) closeLocked() error {
 	if s.closed {
 		return nil
 	}
@@ -255,39 +333,43 @@ func (s *Socket) DialTimeout(addr string, timeout time.Duration) (net.Conn, erro
 	return s.DialContext(ctx, "", addr)
 }
 
-func (s *Socket) resolveAddr(n, addr string) (net.Addr, error) {
-	if n == "" {
-		n = s.Addr().Network()
+func (s *Socket) resolveAddr(network, addr string) (net.Addr, error) {
+	if network == "" {
+		network = s.Addr().Network()
 	}
-	switch n {
+	return resolveAddr(network, addr)
+}
+
+func resolveAddr(network, addr string) (net.Addr, error) {
+	switch network {
 	case "inproc":
-		return inproc.ResolveAddr(n, addr)
+		return inproc.ResolveAddr(network, addr)
 	default:
-		return net.ResolveUDPAddr(n, addr)
+		return net.ResolveUDPAddr(network, addr)
 	}
 }
 
 // Passing an empty network will use the network of the Socket's listener.
 func (s *Socket) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	ua, err := s.resolveAddr(network, addr)
+	c, err := s.NewConn()
 	if err != nil {
-		return nil, fmt.Errorf("error resolving address: %v", err)
+		return nil, err
 	}
-	sa, sl := netAddrToLibSockaddr(ua)
+	err = c.Connect(ctx, network, addr)
+	if err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
+}
+
+func (s *Socket) NewConn() (*Conn, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	if s.closed {
 		return nil, errors.New("socket closed")
 	}
-	c := s.newConn(C.utp_create_socket(s.ctx))
-	C.utp_connect(c.s, sa, sl)
-	c.setRemoteAddr()
-	err = c.waitForConnect(ctx)
-	if err != nil {
-		c.close()
-		return nil, err
-	}
-	return c, nil
+	return s.newConn(C.utp_create_socket(s.ctx)), nil
 }
 
 func (s *Socket) pushBacklog(c *Conn) {
@@ -310,6 +392,9 @@ func (s *Socket) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 }
 
 func (s *Socket) onReadNonUtp(b []byte, from net.Addr) {
+	if s.closed {
+		return
+	}
 	socketNonUtpPacketsReceived.Add(1)
 	select {
 	case s.nonUtpReads <- packet{append([]byte(nil), b...), from}:
@@ -360,4 +445,10 @@ func (s *Socket) SetOption(opt Option, val int) int {
 	mu.Lock()
 	defer mu.Unlock()
 	return int(C.utp_context_set_option(s.ctx, opt, C.int(val)))
+}
+
+func (s *Socket) SetFirewallCallback(f FirewallCallback) {
+	mu.Lock()
+	s.firewallCallback = f
+	mu.Unlock()
 }

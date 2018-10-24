@@ -3,13 +3,13 @@ package dht
 // get_peers and announce_peers.
 
 import (
-	"time"
-
-	"github.com/anacrolix/sync"
-	"github.com/anacrolix/torrent/logonce"
-	"github.com/willf/bloom"
+	"container/heap"
+	"context"
 
 	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/sync"
+	"github.com/willf/bloom"
+	"golang.org/x/time/rate"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started
@@ -38,6 +38,10 @@ type Announce struct {
 	// The torrent port should be determined by the receiver in case we're
 	// being NATed.
 	announcePortImplied bool
+
+	nodesPendingContact nodesByDistance
+	nodeContactorCond   sync.Cond
+	contactRateLimiter  *rate.Limiter
 }
 
 // Returns the number of distinct remote addresses the announce has queried.
@@ -48,7 +52,7 @@ func (a *Announce) NumContacted() int {
 }
 
 func newBloomFilterForTraversal() *bloom.BloomFilter {
-	return bloom.NewWithEstimates(1000, 0.5)
+	return bloom.NewWithEstimates(10000, 0.5)
 }
 
 // This is kind of the main thing you want to do with DHT. It traverses the
@@ -56,13 +60,11 @@ func newBloomFilterForTraversal() *bloom.BloomFilter {
 // caller, and announcing the local node to each node if allowed and
 // specified.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Announce, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	startAddrs, err := s.traversalStartingAddrs()
 	if err != nil {
 		return nil, err
 	}
-	disc := &Announce{
+	a := &Announce{
 		Peers:               make(chan PeersValues, 100),
 		stop:                make(chan struct{}),
 		values:              make(chan PeersValues),
@@ -71,41 +73,46 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		infoHash:            int160FromByteArray(infoHash),
 		announcePort:        port,
 		announcePortImplied: impliedPort,
+		contactRateLimiter:  s.announceContactRateLimiter,
 	}
+	a.nodesPendingContact.target = int160FromByteArray(infoHash)
+	a.nodeContactorCond.L = &a.mu
 	// Function ferries from values to Values until discovery is halted.
 	go func() {
-		defer close(disc.Peers)
+		defer close(a.Peers)
 		for {
 			select {
-			case psv := <-disc.values:
+			case psv := <-a.values:
 				select {
-				case disc.Peers <- psv:
-				case <-disc.stop:
+				case a.Peers <- psv:
+				case <-a.stop:
 					return
 				}
-			case <-disc.stop:
+			case <-a.stop:
 				return
 			}
 		}
 	}()
 	go func() {
-		disc.mu.Lock()
-		defer disc.mu.Unlock()
-		for i, addr := range startAddrs {
-			if i != 0 {
-				disc.mu.Unlock()
-				time.Sleep(time.Millisecond)
-				disc.mu.Lock()
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		for _, addr := range startAddrs {
+			if !a.reserveContact(addr) {
+				continue
 			}
-			disc.contact(addr)
+			a.mu.Unlock()
+			a.contactRateLimiter.Wait(context.TODO())
+			a.mu.Lock()
+			a.contact(addr)
 		}
-		disc.contactedStartAddrs = true
+		a.contactedStartAddrs = true
 		// If we failed to contact any of the starting addrs, no transactions
 		// will complete triggering a check that there are no pending
 		// responses.
-		disc.maybeClose()
+		a.maybeClose()
 	}()
-	return disc, nil
+	go a.nodeContactor()
+	return a, nil
 }
 
 func validNodeAddr(addr Addr) bool {
@@ -114,33 +121,41 @@ func validNodeAddr(addr Addr) bool {
 		return false
 	}
 	if ip4 := ua.IP.To4(); ip4 != nil && ip4[0] == 0 {
+		// Why?
 		return false
 	}
 	return true
 }
 
-// TODO: Merge this with maybeGetPeersFromAddr.
-func (a *Announce) gotNodeAddr(addr Addr) {
+func (a *Announce) reserveContact(addr Addr) bool {
 	if !validNodeAddr(addr) {
-		return
+		return false
 	}
 	if a.triedAddrs.Test([]byte(addr.String())) {
-		return
+		return false
 	}
 	if a.server.ipBlocked(addr.UDPAddr().IP) {
-		return
-	}
-	a.contact(addr)
-}
-
-// TODO: Merge this with maybeGetPeersFromAddr.
-func (a *Announce) contact(addr Addr) {
-	a.numContacted++
-	a.triedAddrs.Add([]byte(addr.String()))
-	if err := a.getPeers(addr); err != nil {
-		return
+		return false
 	}
 	a.pending++
+	a.triedAddrs.Add([]byte(addr.String()))
+	return true
+}
+
+func (a *Announce) completeContact() {
+	a.pending--
+	a.maybeClose()
+}
+
+func (a *Announce) contact(addr Addr) {
+	a.numContacted++
+	go func() {
+		if a.getPeers(addr) != nil {
+			a.mu.Lock()
+			a.completeContact()
+			a.mu.Unlock()
+		}
+	}()
 }
 
 func (a *Announce) maybeClose() {
@@ -149,13 +164,8 @@ func (a *Announce) maybeClose() {
 	}
 }
 
-func (a *Announce) transactionClosed() {
-	a.pending--
-	a.maybeClose()
-}
-
 func (a *Announce) responseNode(node krpc.NodeInfo) {
-	a.gotNodeAddr(NewAddr(node.Addr.UDP()))
+	a.pendContact(node)
 }
 
 // Announce to a peer, if appropriate.
@@ -165,10 +175,7 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token string, peerId *krpc.ID) {
 	}
 	a.server.mu.Lock()
 	defer a.server.mu.Unlock()
-	err := a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied, nil)
-	if err != nil {
-		logonce.Stderr.Printf("error announcing peer: %s", err)
-	}
+	a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied, nil)
 }
 
 func (a *Announce) getPeers(addr Addr) error {
@@ -200,7 +207,7 @@ func (a *Announce) getPeers(addr Addr) error {
 			a.maybeAnnouncePeer(addr, m.R.Token, m.SenderID())
 		}
 		a.mu.Lock()
-		a.transactionClosed()
+		a.completeContact()
 		a.mu.Unlock()
 	})
 }
@@ -225,5 +232,37 @@ func (a *Announce) close() {
 	case <-a.stop:
 	default:
 		close(a.stop)
+		a.nodeContactorCond.Broadcast()
+	}
+}
+
+func (a *Announce) pendContact(node krpc.NodeInfo) {
+	if !a.reserveContact(NewAddr(node.Addr.UDP())) {
+		return
+	}
+	heap.Push(&a.nodesPendingContact, node)
+	a.nodeContactorCond.Signal()
+}
+
+func (a *Announce) nodeContactor() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for {
+		for {
+			select {
+			case <-a.stop:
+				return
+			default:
+			}
+			if a.nodesPendingContact.Len() > 0 {
+				break
+			}
+			a.nodeContactorCond.Wait()
+		}
+		a.mu.Unlock()
+		a.contactRateLimiter.Wait(context.TODO())
+		a.mu.Lock()
+		ni := heap.Pop(&a.nodesPendingContact).(krpc.NodeInfo)
+		a.contact(NewAddr(ni.Addr.UDP()))
 	}
 }

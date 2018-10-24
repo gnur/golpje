@@ -5,6 +5,8 @@ import (
 	"net"
 
 	"github.com/anacrolix/missinggo"
+	"golang.org/x/time/rate"
+
 	"github.com/anacrolix/torrent/metainfo"
 	pp "github.com/anacrolix/torrent/peer_protocol"
 )
@@ -96,7 +98,7 @@ func validateInfo(info *metainfo.Info) error {
 	return nil
 }
 
-func chunkIndexSpec(index int, pieceLength, chunkSize pp.Integer) chunkSpec {
+func chunkIndexSpec(index pp.Integer, pieceLength, chunkSize pp.Integer) chunkSpec {
 	ret := chunkSpec{pp.Integer(index) * chunkSize, chunkSize}
 	if ret.Begin+ret.Length > pieceLength {
 		ret.Length = pieceLength - ret.Begin
@@ -106,23 +108,6 @@ func chunkIndexSpec(index int, pieceLength, chunkSize pp.Integer) chunkSpec {
 
 func connLessTrusted(l, r *connection) bool {
 	return l.netGoodPiecesDirtied() < r.netGoodPiecesDirtied()
-}
-
-// Convert a net.Addr to its compact IP representation. Either 4 or 16 bytes
-// per "yourip" field of http://www.bittorrent.org/beps/bep_0010.html.
-func addrCompactIP(addr net.Addr) (string, error) {
-	host, _, err := net.SplitHostPort(addr.String())
-	if err != nil {
-		return "", err
-	}
-	ip := net.ParseIP(host)
-	if v4 := ip.To4(); v4 != nil {
-		if len(v4) != 4 {
-			panic(v4)
-		}
-		return string(v4), nil
-	}
-	return string(ip.To16()), nil
 }
 
 func connIsIpv6(nc interface {
@@ -165,3 +150,10 @@ func min(as ...int64) int64 {
 	}
 	return ret
 }
+
+var unlimited = rate.NewLimiter(rate.Inf, 0)
+
+type (
+	pieceIndex = int
+	InfoHash   = metainfo.Hash
+)
