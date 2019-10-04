@@ -94,30 +94,31 @@ func runOnce(cfg *config.Cfg) {
 					sourceName := filepath.Join(dlDir, f.Path())
 					extension := filepath.Ext(sourceName)
 					targetName := filepath.Join(FormatTargetDir(name, id, show.Seasonal), filepath.Base(f.Path()))
-					if extension != ".mp4" && cfg.ConvertToMP4 {
-						sourceConvert := strings.Replace(sourceName, extension, ".mp4", -1)
-						showLog.WithFields(log.Fields{
-							"src":    sourceName,
-							"target": sourceConvert,
-						}).Info("converting container")
-						cmd := exec.Command("ffmpeg", "-i", sourceName, "-codec", "copy", sourceConvert)
-						err := cmd.Run()
-						if err != nil {
-							showLog.WithFields(log.Fields{
-								"src":    sourceName,
-								"target": sourceConvert,
-								"error":  err.Error(),
-							}).Warning("Converting failed")
-							continue
-						}
-						sourceName = sourceConvert
-						targetName = strings.Replace(targetName, extension, ".mp4", -1)
+					convertName := strings.Replace(sourceName, extension, "-converted"+extension, 0)
+					if extension != ".mp4" {
+						convertName = strings.Replace(sourceName, extension, ".mp4", -1)
 					}
 					showLog.WithFields(log.Fields{
 						"src":    sourceName,
+						"target": convertName,
+					}).Info("converting container")
+					cmd := exec.Command("ffmpeg", "-i", sourceName, "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", convertName)
+					err := cmd.Run()
+					if err != nil {
+						showLog.WithFields(log.Fields{
+							"src":    sourceName,
+							"target": convertName,
+							"error":  err.Error(),
+						}).Warning("Converting failed")
+						continue
+					}
+					targetName = strings.Replace(targetName, extension, ".mp4", -1)
+
+					showLog.WithFields(log.Fields{
+						"src":    convertName,
 						"target": targetName,
 					}).Info("starting transfer")
-					in, err := os.Open(sourceName)
+					in, err := os.Open(convertName)
 					if err != nil {
 						showLog.WithField("err", err).Error("Could not open file for reading")
 						continue
