@@ -1,0 +1,15 @@
+#!/bin/bash
+
+function log {
+    echo "> ${*}"
+}
+
+log "building"
+mkdir -p dist
+
+export GOOS=linux
+export GOARCH=amd64
+
+go build -o dist/golpje ./*.go
+
+scp dist/golpje hetty:/tmp/golpje

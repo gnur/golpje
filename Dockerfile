@@ -1,10 +1,13 @@
-FROM golang:1.8.1 as builder
+FROM golang:1.11-alpine as builder
 WORKDIR /go/src/github.com/gnur/golpje/
-COPY main.go .
+COPY vendor vendor
+COPY search search
+COPY config config
+COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
 
-FROM scratch
+FROM alpine
+RUN apk add --no-cache ca-certificates ffmpeg
 WORKDIR /
-COPY --from=builder /go/src/github.com/gnur/snost/app .
-EXPOSE 8080
+COPY --from=builder /go/src/github.com/gnur/golpje/app .
 CMD ["/app"]

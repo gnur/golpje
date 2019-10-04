@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
 
 	"github.com/anacrolix/torrent/tracker"
@@ -14,7 +17,7 @@ import (
 // Announces a torrent to a tracker at regular intervals, when peers are
 // required.
 type trackerScraper struct {
-	url string
+	u url.URL
 	// Causes the trackerScraper to stop running.
 	stop         missinggo.Event
 	t            *Torrent
@@ -24,7 +27,7 @@ type trackerScraper struct {
 func (ts *trackerScraper) statusLine() string {
 	var w bytes.Buffer
 	fmt.Fprintf(&w, "%q\t%s\t%s",
-		ts.url,
+		ts.u.String(),
 		func() string {
 			na := time.Until(ts.lastAnnounce.Completed.Add(ts.lastAnnounce.Interval))
 			if na > 0 {
@@ -43,7 +46,8 @@ func (ts *trackerScraper) statusLine() string {
 				return "never"
 			}
 			return fmt.Sprintf("%d peers", ts.lastAnnounce.NumPeers)
-		}())
+		}(),
+	)
 	return w.String()
 }
 
@@ -54,16 +58,41 @@ type trackerAnnounceResult struct {
 	Completed time.Time
 }
 
-func trackerToTorrentPeers(ps []tracker.Peer) (ret []Peer) {
-	ret = make([]Peer, 0, len(ps))
-	for _, p := range ps {
-		ret = append(ret, Peer{
-			IP:     p.IP,
-			Port:   p.Port,
-			Source: peerSourceTracker,
-		})
+func (me *trackerScraper) getIp() (ip net.IP, err error) {
+	ips, err := net.LookupIP(me.u.Hostname())
+	if err != nil {
+		return
 	}
+	if len(ips) == 0 {
+		err = errors.New("no ips")
+		return
+	}
+	for _, ip = range ips {
+		if me.t.cl.ipIsBlocked(ip) {
+			continue
+		}
+		switch me.u.Scheme {
+		case "udp4":
+			if ip.To4() == nil {
+				continue
+			}
+		case "udp6":
+			if ip.To4() != nil {
+				continue
+			}
+		}
+		return
+	}
+	err = errors.New("no acceptable ips")
 	return
+}
+
+func (me *trackerScraper) trackerUrl(ip net.IP) string {
+	u := me.u
+	if u.Port() != "" {
+		u.Host = net.JoinHostPort(ip.String(), u.Port())
+	}
+	return u.String()
 }
 
 // Return how long to wait before trying again. For most errors, we return 5
@@ -73,24 +102,29 @@ func (me *trackerScraper) announce() (ret trackerAnnounceResult) {
 		ret.Completed = time.Now()
 	}()
 	ret.Interval = 5 * time.Minute
-	blocked, urlToUse, host, err := me.t.cl.prepareTrackerAnnounceUnlocked(me.url)
+	ip, err := me.getIp()
 	if err != nil {
-		ret.Err = err
+		ret.Err = fmt.Errorf("error getting ip: %s", err)
 		return
 	}
-	if blocked {
-		ret.Err = errors.New("blocked by IP")
-		return
-	}
-	me.t.cl.mu.Lock()
+	me.t.cl.lock()
 	req := me.t.announceRequest()
-	me.t.cl.mu.Unlock()
-	res, err := tracker.AnnounceHost(urlToUse, &req, host)
+	me.t.cl.unlock()
+	res, err := tracker.Announce{
+		UserAgent:  me.t.cl.config.HTTPUserAgent,
+		TrackerUrl: me.trackerUrl(ip),
+		Request:    req,
+		HostHeader: me.u.Host,
+		ServerName: me.u.Hostname(),
+		UdpNetwork: me.u.Scheme,
+		ClientIp4:  krpc.NodeAddr{IP: me.t.cl.config.PublicIp4},
+		ClientIp6:  krpc.NodeAddr{IP: me.t.cl.config.PublicIp6},
+	}.Do()
 	if err != nil {
-		ret.Err = err
+		ret.Err = fmt.Errorf("error announcing: %s", err)
 		return
 	}
-	me.t.AddPeers(trackerToTorrentPeers(res.Peers))
+	me.t.AddPeers(Peers(nil).AppendFromTracker(res.Peers))
 	ret.NumPeers = len(res.Peers)
 	ret.Interval = time.Duration(res.Interval) * time.Second
 	return
@@ -98,27 +132,34 @@ func (me *trackerScraper) announce() (ret trackerAnnounceResult) {
 
 func (me *trackerScraper) Run() {
 	for {
+		ar := me.announce()
+		me.t.cl.lock()
+		me.lastAnnounce = ar
+		me.t.cl.unlock()
+
+	wait:
+		interval := ar.Interval
+		if interval < time.Minute {
+			interval = time.Minute
+		}
+		wantPeers := me.t.wantPeersEvent.LockedChan(me.t.cl.locker())
 		select {
-		case <-me.t.closed.LockedChan(&me.t.cl.mu):
-			return
-		case <-me.stop.LockedChan(&me.t.cl.mu):
-			return
-		case <-me.t.wantPeersEvent.LockedChan(&me.t.cl.mu):
+		case <-wantPeers:
+			if interval > time.Minute {
+				interval = time.Minute
+			}
+			wantPeers = nil
+		default:
 		}
 
-		ar := me.announce()
-		me.t.cl.mu.Lock()
-		me.lastAnnounce = ar
-		me.t.cl.mu.Unlock()
-
-		intervalChan := time.After(ar.Completed.Add(ar.Interval).Sub(time.Now()))
-
 		select {
-		case <-me.t.closed.LockedChan(&me.t.cl.mu):
+		case <-me.t.closed.LockedChan(me.t.cl.locker()):
 			return
-		case <-me.stop.LockedChan(&me.t.cl.mu):
+		case <-me.stop.LockedChan(me.t.cl.locker()):
 			return
-		case <-intervalChan:
+		case <-wantPeers:
+			goto wait
+		case <-time.After(time.Until(ar.Completed.Add(interval))):
 		}
 	}
 }
